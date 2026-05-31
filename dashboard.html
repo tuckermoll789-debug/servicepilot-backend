@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ServicePilot Call Dashboard</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:Inter,Arial,sans-serif;background:#f8fafc;color:#0f172a}
+.nav{background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10}
+.nav-inner{max-width:1180px;margin:auto;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
+.logo{font-size:23px;font-weight:950;letter-spacing:-.05em}
+button,a{border:0;border-radius:999px;background:#2563eb;color:white;padding:12px 16px;font-weight:900;cursor:pointer;text-decoration:none}
+button.gray{background:#e2e8f0;color:#0f172a}
+button.green{background:#16a34a}
+button.red{background:#dc2626}
+.wrap{max-width:1180px;margin:auto;padding:34px 24px}
+h1{font-size:44px;letter-spacing:-.06em;margin:0 0 8px}
+p{color:#64748b;line-height:1.6}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:24px 0}
+.card{background:white;border:1px solid #e2e8f0;border-radius:28px;padding:24px;box-shadow:0 18px 50px rgba(15,23,42,.06)}
+.stat strong{display:block;font-size:36px;color:#2563eb;letter-spacing:-.05em}
+.stat span{color:#64748b;font-weight:850}
+.leads{display:grid;gap:16px}
+.lead-top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.badge{display:inline-block;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:950;background:#eff6ff;color:#2563eb;margin-right:6px}
+.badge.high{background:#dcfce7;color:#166534}
+.badge.medium{background:#fef3c7;color:#92400e}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
+.detail{background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:14px}
+.detail span{display:block;color:#64748b;font-size:12px;font-weight:950;text-transform:uppercase;margin-bottom:5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
+.empty{text-align:center;padding:50px;color:#64748b}
+@media(max-width:850px){.stats,.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<nav class="nav">
+<div class="nav-inner">
+<div class="logo">ServicePilot Call Dashboard</div>
+<div>
+<button class="gray" onclick="loadLeads()">Refresh</button>
+<button class="red" onclick="clearLeads()">Clear</button>
+</div>
+</div>
+</nav>
+
+<main class="wrap">
+<h1>Phone & SMS Leads</h1>
+<p>Real Twilio phone calls and texts will appear here after the webhook is connected.</p>
+
+<div class="stats">
+<div class="card stat"><strong id="total">0</strong><span>Total leads</span></div>
+<div class="card stat"><strong id="newCount">0</strong><span>New</span></div>
+<div class="card stat"><strong id="highCount">0</strong><span>High intent</span></div>
+<div class="card stat"><strong id="approvedCount">0</strong><span>Approved</span></div>
+</div>
+
+<div class="leads" id="leads"></div>
+</main>
+
+<script>
+function badgeClass(qualification){
+  if(qualification==="High intent") return "high";
+  if(qualification==="Medium intent") return "medium";
+  return "";
+}
+
+async function updateLead(id,status){
+  await fetch(`/api/leads/${id}`, {
+    method:"PATCH",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({status})
+  });
+  loadLeads();
+}
+
+async function clearLeads(){
+  if(!confirm("Clear all leads?")) return;
+  await fetch("/api/leads", {method:"DELETE"});
+  loadLeads();
+}
+
+async function loadLeads(){
+  const res=await fetch("/api/leads");
+  const leads=await res.json();
+
+  total.textContent=leads.length;
+  newCount.textContent=leads.filter(l=>l.status==="New").length;
+  highCount.textContent=leads.filter(l=>l.qualification==="High intent").length;
+  approvedCount.textContent=leads.filter(l=>l.status==="Appointment Approved").length;
+
+  if(!leads.length){
+    document.getElementById("leads").innerHTML='<div class="card empty">No leads yet. Call or text your Twilio number after setup.</div>';
+    return;
+  }
+
+  document.getElementById("leads").innerHTML=leads.map(lead=>`
+    <div class="card">
+      <div class="lead-top">
+        <div>
+          <h2 style="margin:0 0 8px">${lead.name || "Unknown"} · ${lead.jobType || "New Lead"}</h2>
+          <span class="badge ${badgeClass(lead.qualification)}">${lead.qualification || "Needs follow-up"}</span>
+          <span class="badge">${lead.status || "New"}</span>
+          <span class="badge">${lead.source || "Unknown"}</span>
+          <span class="badge">Score ${lead.score || 0}</span>
+        </div>
+        <div style="color:#64748b;font-weight:850;font-size:14px">${new Date(lead.createdAt).toLocaleString()}</div>
+      </div>
+
+      <div class="grid">
+        <div class="detail"><span>Phone</span><strong>${lead.phone || lead.callerPhone || "Not captured"}</strong></div>
+        <div class="detail"><span>Location</span><strong>${lead.location || "Not captured"}</strong></div>
+        <div class="detail"><span>Urgency</span><strong>${lead.urgency || "Not captured"}</strong></div>
+        <div class="detail"><span>Preferred time</span><strong>${lead.preferredTime || "Not captured"}</strong></div>
+        <div class="detail"><span>Recommended</span><strong>${lead.recommendedAction || "Call customer"}</strong></div>
+        <div class="detail"><span>Call SID</span><strong>${lead.callSid || "N/A"}</strong></div>
+      </div>
+
+      <p><strong>Notes:</strong> ${lead.notes || "No notes"}</p>
+
+      <div class="actions">
+        <a href="tel:${lead.phone || lead.callerPhone}" class="green">Call Customer</a>
+        <a href="sms:${lead.phone || lead.callerPhone}" class="gray">Text Customer</a>
+        <button onclick="updateLead('${lead.id}','Appointment Approved')">Approve Appointment</button>
+        <button class="gray" onclick="updateLead('${lead.id}','Reschedule Needed')">Reschedule</button>
+        <button class="red" onclick="updateLead('${lead.id}','Declined')">Decline</button>
+      </div>
+    </div>
+  `).join("");
+}
+
+loadLeads();
+</script>
+</body>
+</html>
