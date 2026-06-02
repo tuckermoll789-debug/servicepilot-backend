@@ -130,7 +130,7 @@ function sayAndGather(response, prompt, actionUrl) {
     language: "en-US"
   });
 
-  gatherNode.say({ voice: "alice" }, prompt);
+  gatherNode.say({ voice: "Polly.Matthew" }, prompt);
   response.redirect(actionUrl);
 }
 
@@ -148,8 +148,8 @@ app.post("/voice/start", (req, res) => {
   const callerPhone = req.body.From || "";
 
   response.say(
-    { voice: "alice" },
-    "Thanks for calling. I am the ServicePilot assistant. I will collect a few details and send them to the owner."
+    { voice: "Polly.Matthew" },
+    "Thanks for calling. I'm the ServicePilot assistant. Im going to grab your info quick."
   );
 
   response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
@@ -160,7 +160,7 @@ app.post("/voice/name", (req, res) => {
   const response = new VoiceResponse();
   sayAndGather(
     response,
-    "First, what is your name?",
+    "what's your name?",
     `/voice/job-type?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}`
   );
   res.type("text/xml").send(response.toString());
@@ -171,7 +171,7 @@ app.post("/voice/job-type", (req, res) => {
   const name = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "Thanks. What type of job do you need help with? For example, roof leak, plumbing issue, H V A C repair, or landscaping estimate.",
+    "K, what job do you need done",
     `/voice/location?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(name)}`
   );
   res.type("text/xml").send(response.toString());
@@ -182,7 +182,7 @@ app.post("/voice/location", (req, res) => {
   const jobType = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "What city or area is the job located in?",
+    "What is your general location?",
     `/voice/urgency?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(jobType)}`
   );
   res.type("text/xml").send(response.toString());
@@ -193,7 +193,7 @@ app.post("/voice/urgency", (req, res) => {
   const location = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "How urgent is this? Is it an emergency, needed this week, or are you just getting quotes?",
+    "How urgent is this?",
     `/voice/preferred-time?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(location)}`
   );
   res.type("text/xml").send(response.toString());
@@ -204,7 +204,7 @@ app.post("/voice/preferred-time", (req, res) => {
   const urgency = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "What time works best for the owner to call you back or request an appointment?",
+    "When are you free for a call back?",
     `/voice/notes?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(urgency)}`
   );
   res.type("text/xml").send(response.toString());
@@ -215,7 +215,7 @@ app.post("/voice/notes", (req, res) => {
   const preferredTime = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "Last question. Is there anything else the owner should know?",
+    "Any other details you need to say now?",
     `/voice/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(req.query.urgency || "")}&preferredTime=${encodeURIComponent(preferredTime)}`
   );
   res.type("text/xml").send(response.toString());
@@ -258,8 +258,8 @@ app.post("/voice/finish", async (req, res) => {
   }
 
   response.say(
-    { voice: "alice" },
-    "Thank you. I sent your information to the owner. They can call you back, send a text, or approve an appointment request. Goodbye."
+    { voice: "Polly.Matthew" },
+    "I got your info sent over and we will be in touch soon. Thanks!"
   );
   response.hangup();
 
@@ -302,7 +302,7 @@ app.post("/sms", async (req, res) => {
     console.error("Owner SMS notification failed:", error.message);
   }
 
-  response.message("Thanks for reaching out. I sent your message to the owner. They can call or text you back soon.");
+  response.message("I got your info sent over and we will be in touch soon. Thanks!");
   res.type("text/xml").send(response.toString());
 });
 
