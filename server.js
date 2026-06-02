@@ -58,7 +58,10 @@ async function saveLead(lead) {
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) {
+  console.error("Supabase save error:", JSON.stringify(error, null, 2));
+  throw error;
+}
   return data;
 }
 
