@@ -6,6 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const twilio = require("twilio");
 const { v4: uuidv4 } = require("uuid");
+const nodemailer = require("nodemailer");
 
 const app = express();
 const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -70,6 +71,38 @@ function ownerSmsText(lead) {
     `Score: ${lead.score}`,
     `Action: Call back, text, approve appointment, or reschedule.`
   ].join("\n");
+}
+
+const transporter = nodemailer.createTransport({
+  service: "gmail",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  }
+});
+
+async function sendOwnerEmail(lead) {
+  if (!process.env.NOTIFICATION_EMAIL) return;
+
+  await transporter.sendMail({
+    from: process.env.EMAIL_USER,
+    to: process.env.NOTIFICATION_EMAIL,
+    subject: `New ServicePilot Lead - ${lead.qualification}`,
+    text: `
+Name: ${lead.name}
+Phone: ${lead.phone || lead.callerPhone}
+Job Type: ${lead.jobType}
+Location: ${lead.location}
+Urgency: ${lead.urgency}
+Preferred Time: ${lead.preferredTime}
+
+Notes:
+${lead.notes}
+
+Recommended Action:
+${lead.recommendedAction}
+`
+  });
 }
 
 async function notifyOwner(lead) {
@@ -225,6 +258,7 @@ app.post("/voice/finish", async (req, res) => {
 
   try {
     await notifyOwner(lead);
+    await sendOwnerEmail(lead);
   } catch (error) {
     console.error("Owner notification failed:", error.message);
   }
