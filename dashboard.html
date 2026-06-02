@@ -1,135 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ServicePilot Call Dashboard</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ServicePilot Dashboard</title>
 <style>
-*{box-sizing:border-box}
-body{margin:0;font-family:Inter,Arial,sans-serif;background:#f8fafc;color:#0f172a}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f8fafc;color:#0f172a}
+a{text-decoration:none;color:inherit}button,input,select{font-family:inherit}
 .nav{background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10}
-.nav-inner{max-width:1180px;margin:auto;padding:18px 24px;display:flex;justify-content:space-between;align-items:center}
-.logo{font-size:23px;font-weight:950;letter-spacing:-.05em}
-button,a{border:0;border-radius:999px;background:#2563eb;color:white;padding:12px 16px;font-weight:900;cursor:pointer;text-decoration:none}
-button.gray{background:#e2e8f0;color:#0f172a}
-button.green{background:#16a34a}
-button.red{background:#dc2626}
-.wrap{max-width:1180px;margin:auto;padding:34px 24px}
-h1{font-size:44px;letter-spacing:-.06em;margin:0 0 8px}
-p{color:#64748b;line-height:1.6}
-.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:24px 0}
-.card{background:white;border:1px solid #e2e8f0;border-radius:28px;padding:24px;box-shadow:0 18px 50px rgba(15,23,42,.06)}
-.stat strong{display:block;font-size:36px;color:#2563eb;letter-spacing:-.05em}
-.stat span{color:#64748b;font-weight:850}
-.leads{display:grid;gap:16px}
-.lead-top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
-.badge{display:inline-block;border-radius:999px;padding:8px 11px;font-size:12px;font-weight:950;background:#eff6ff;color:#2563eb;margin-right:6px}
-.badge.high{background:#dcfce7;color:#166534}
-.badge.medium{background:#fef3c7;color:#92400e}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:16px}
-.detail{background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:14px}
-.detail span{display:block;color:#64748b;font-size:12px;font-weight:950;text-transform:uppercase;margin-bottom:5px}
+.nav-inner{max-width:1280px;margin:auto;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:950;letter-spacing:-.05em}
+.logo-mark{width:44px;height:44px;border-radius:15px;background:linear-gradient(135deg,#2563eb,#14b8a6);display:grid;place-items:center;color:white}
+.btn{border:0;border-radius:999px;background:#2563eb;color:white;padding:12px 16px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn.green{background:#16a34a}.btn.red{background:#dc2626}.btn.gray{background:#e2e8f0;color:#0f172a}.btn.dark{background:#0f172a}.btn.amber{background:#d97706}.btn.small{padding:9px 12px;font-size:13px}
+.wrap{max-width:1280px;margin:auto;padding:32px 24px 60px}
+.hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-start;margin-bottom:22px}
+h1{font-size:46px;letter-spacing:-.065em;line-height:1;margin:0 0 8px}
+p{color:#64748b;line-height:1.6;margin:0}
+.stats{display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin:24px 0}
+.card{background:white;border:1px solid #e2e8f0;border-radius:26px;padding:22px;box-shadow:0 18px 50px rgba(15,23,42,.055)}
+.stat strong{display:block;font-size:34px;color:#2563eb;letter-spacing:-.055em;margin-bottom:4px}
+.stat span{display:block;color:#64748b;font-weight:850;font-size:14px}
+.toolbar{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:24px 0;flex-wrap:wrap}
+.filters{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+input,select{border:1px solid #cbd5e1;background:white;border-radius:999px;padding:12px 14px;font-size:15px;outline:0}
+input{min-width:260px}.pipeline{display:flex;gap:8px;overflow:auto;padding-bottom:16px}
+.tab{border:1px solid #e2e8f0;background:white;color:#334155;border-radius:999px;padding:10px 14px;font-weight:900;cursor:pointer;white-space:nowrap}
+.tab.active{background:#eff6ff;border-color:#bfdbfe;color:#1d4ed8}
+.main{display:grid;grid-template-columns:1fr 330px;gap:18px;align-items:start}
+.leads{display:grid;gap:14px}.lead-card{background:white;border:1px solid #e2e8f0;border-radius:28px;padding:22px;box-shadow:0 18px 50px rgba(15,23,42,.055)}
+.lead-top{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.lead-title h2{font-size:24px;letter-spacing:-.045em;margin:0 0 8px}
+.badges{display:flex;gap:7px;flex-wrap:wrap}.badge{display:inline-flex;border-radius:999px;padding:7px 10px;font-size:12px;font-weight:950;background:#eff6ff;color:#2563eb}
+.badge.high{background:#dcfce7;color:#166534}.badge.medium{background:#fef3c7;color:#92400e}.badge.low{background:#fee2e2;color:#991b1b}.badge.status{background:#f1f5f9;color:#334155}
+.time{color:#64748b;font-size:13px;font-weight:800;text-align:right}
+.details{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:18px 0}
+.detail{background:#f8fafc;border:1px solid #e2e8f0;border-radius:18px;padding:13px}
+.detail span{display:block;color:#64748b;font-size:11px;font-weight:950;text-transform:uppercase;letter-spacing:.04em;margin-bottom:5px}
+.detail strong{font-size:14px;line-height:1.35}.notes{border-top:1px solid #e2e8f0;padding-top:14px;margin-top:14px;color:#334155;line-height:1.55}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}
-.empty{text-align:center;padding:50px;color:#64748b}
-@media(max-width:850px){.stats,.grid{grid-template-columns:1fr}}
+.side{position:sticky;top:94px;display:grid;gap:14px}.side h3{font-size:20px;letter-spacing:-.035em;margin:0 0 8px}
+.activity{display:grid;gap:10px}.activity-item{border:1px solid #e2e8f0;border-radius:18px;padding:12px;background:#f8fafc}
+.activity-item strong{display:block;font-size:14px;margin-bottom:3px}.activity-item span{font-size:12px;color:#64748b;font-weight:800}
+.empty{text-align:center;padding:54px;color:#64748b}
+.modal{position:fixed;inset:0;background:rgba(15,23,42,.58);z-index:50;display:none;place-items:center;padding:24px}
+.modal.show{display:grid}.modal-card{background:white;border-radius:30px;max-width:560px;width:100%;padding:28px;box-shadow:0 30px 90px rgba(0,0,0,.25)}
+textarea{width:100%;min-height:140px;border:1px solid #cbd5e1;border-radius:18px;padding:14px;font-size:15px;resize:vertical;outline:0}
+.modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:white;padding:13px 16px;border-radius:999px;font-weight:900;display:none;z-index:80}
+.toast.show{display:block}
+@media(max-width:980px){.hero,.main{display:block}.stats{grid-template-columns:repeat(2,1fr)}.details{grid-template-columns:1fr}.side{position:static;margin-top:18px}input{min-width:0;width:100%}.toolbar,.filters{display:grid;width:100%}}
 </style>
 </head>
 <body>
-<nav class="nav">
-<div class="nav-inner">
-<div class="logo">ServicePilot Call Dashboard</div>
-<div>
-<button class="gray" onclick="loadLeads()">Refresh</button>
-<button class="red" onclick="clearLeads()">Clear</button>
-</div>
-</div>
-</nav>
-
+<nav class="nav"><div class="nav-inner"><div class="logo"><div class="logo-mark">SP</div>ServicePilot</div><div><button class="btn gray" onclick="loadLeads()">Refresh</button> <button class="btn red" onclick="clearLeads()">Clear Demo Leads</button></div></div></nav>
 <main class="wrap">
-<h1>Phone & SMS Leads</h1>
-<p>Real Twilio phone calls and texts will appear here after the webhook is connected.</p>
-
-<div class="stats">
-<div class="card stat"><strong id="total">0</strong><span>Total leads</span></div>
-<div class="card stat"><strong id="newCount">0</strong><span>New</span></div>
-<div class="card stat"><strong id="highCount">0</strong><span>High intent</span></div>
-<div class="card stat"><strong id="approvedCount">0</strong><span>Approved</span></div>
-</div>
-
-<div class="leads" id="leads"></div>
+<section class="hero"><div><h1>Lead Dashboard</h1><p>Manage every call, callback, appointment request, and booked job in one place.</p></div><a class="btn dark" href="/api/leads" target="_blank">View Raw Leads</a></section>
+<section class="stats"><div class="card stat"><strong id="totalCount">0</strong><span>Total Leads</span></div><div class="card stat"><strong id="newCount">0</strong><span>New</span></div><div class="card stat"><strong id="contactedCount">0</strong><span>Contacted</span></div><div class="card stat"><strong id="bookedCount">0</strong><span>Booked</span></div><div class="card stat"><strong id="highCount">0</strong><span>High Intent</span></div></section>
+<section class="toolbar"><div class="filters"><input id="searchInput" placeholder="Search name, phone, job, city..." oninput="renderLeads()"><select id="sortSelect" onchange="renderLeads()"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="score">Highest score</option></select></div><button class="btn gray small" onclick="exportCsv()">Export CSV</button></section>
+<section class="pipeline" id="pipeline"></section>
+<section class="main"><div class="leads" id="leads"></div><aside class="side"><div class="card"><h3>Recommended workflow</h3><p style="margin-bottom:12px;">Mark each lead as contacted, quote sent, booked, or lost.</p><p><strong>Best action:</strong> call high-intent leads within 5 minutes.</p></div><div class="card"><h3>Recent activity</h3><div class="activity" id="activity"></div></div></aside></section>
 </main>
-
+<div class="modal" id="modal"><div class="modal-card"><h2 id="modalTitle">Action</h2><p id="modalSubtitle" style="margin-bottom:14px;"></p><textarea id="modalBody"></textarea><div class="modal-actions"><button class="btn gray" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveModalAction()">Save</button></div></div></div>
+<div class="toast" id="toast"></div>
 <script>
-function badgeClass(qualification){
-  if(qualification==="High intent") return "high";
-  if(qualification==="Medium intent") return "medium";
-  return "";
-}
-
-async function updateLead(id,status){
-  await fetch(`/api/leads/${id}`, {
-    method:"PATCH",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({status})
-  });
-  loadLeads();
-}
-
-async function clearLeads(){
-  if(!confirm("Clear all leads?")) return;
-  await fetch("/api/leads", {method:"DELETE"});
-  loadLeads();
-}
-
-async function loadLeads(){
-  const res=await fetch("/api/leads");
-  const leads=await res.json();
-
-  total.textContent=leads.length;
-  newCount.textContent=leads.filter(l=>l.status==="New").length;
-  highCount.textContent=leads.filter(l=>l.qualification==="High intent").length;
-  approvedCount.textContent=leads.filter(l=>l.status==="Appointment Approved").length;
-
-  if(!leads.length){
-    document.getElementById("leads").innerHTML='<div class="card empty">No leads yet. Call or text your Twilio number after setup.</div>';
-    return;
-  }
-
-  document.getElementById("leads").innerHTML=leads.map(lead=>`
-    <div class="card">
-      <div class="lead-top">
-        <div>
-          <h2 style="margin:0 0 8px">${lead.name || "Unknown"} · ${lead.jobType || "New Lead"}</h2>
-          <span class="badge ${badgeClass(lead.qualification)}">${lead.qualification || "Needs follow-up"}</span>
-          <span class="badge">${lead.status || "New"}</span>
-          <span class="badge">${lead.source || "Unknown"}</span>
-          <span class="badge">Score ${lead.score || 0}</span>
-        </div>
-        <div style="color:#64748b;font-weight:850;font-size:14px">${new Date(lead.createdAt).toLocaleString()}</div>
-      </div>
-
-      <div class="grid">
-        <div class="detail"><span>Phone</span><strong>${lead.phone || lead.callerPhone || "Not captured"}</strong></div>
-        <div class="detail"><span>Location</span><strong>${lead.location || "Not captured"}</strong></div>
-        <div class="detail"><span>Urgency</span><strong>${lead.urgency || "Not captured"}</strong></div>
-        <div class="detail"><span>Preferred time</span><strong>${lead.preferredTime || "Not captured"}</strong></div>
-        <div class="detail"><span>Recommended</span><strong>${lead.recommendedAction || "Call customer"}</strong></div>
-        <div class="detail"><span>Call SID</span><strong>${lead.callSid || "N/A"}</strong></div>
-      </div>
-
-      <p><strong>Notes:</strong> ${lead.notes || "No notes"}</p>
-
-      <div class="actions">
-        <a href="tel:${lead.phone || lead.callerPhone}" class="green">Call Customer</a>
-        <a href="sms:${lead.phone || lead.callerPhone}" class="gray">Text Customer</a>
-        <button onclick="updateLead('${lead.id}','Appointment Approved')">Approve Appointment</button>
-        <button class="gray" onclick="updateLead('${lead.id}','Reschedule Needed')">Reschedule</button>
-        <button class="red" onclick="updateLead('${lead.id}','Declined')">Decline</button>
-      </div>
-    </div>
-  `).join("");
-}
-
+let allLeads=[];let currentStatus="All";let activeLeadId=null;let activeAction=null;
+const statuses=["All","New","Contacted","Quote Sent","Booked","Lost","Appointment Approved","Reschedule Needed","Declined"];
+function showToast(m){toast.textContent=m;toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),2400)}
+function clean(v){if(v===undefined||v===null||v==="")return"Not captured";return String(v).replace(/\s+/g," ").trim()}
+function leadDate(l){return l.createdAt?new Date(l.createdAt).toLocaleString():""}
+function statusOf(l){return l.status||"New"}
+function badgeClass(q){if(q==="High intent")return"high";if(q==="Medium intent")return"medium";return"low"}
+async function loadLeads(){try{const r=await fetch("/api/leads");allLeads=await r.json();renderPipeline();renderLeads();renderActivity()}catch(e){leads.innerHTML='<div class="card empty">Could not load leads. Check Render logs.</div>'}}
+function renderStats(){totalCount.textContent=allLeads.length;newCount.textContent=allLeads.filter(l=>statusOf(l)==="New").length;contactedCount.textContent=allLeads.filter(l=>["Contacted","Quote Sent","Booked"].includes(statusOf(l))).length;bookedCount.textContent=allLeads.filter(l=>["Booked","Appointment Approved"].includes(statusOf(l))).length;highCount.textContent=allLeads.filter(l=>l.qualification==="High intent").length}
+function renderPipeline(){pipeline.innerHTML=statuses.map(s=>{const c=s==="All"?allLeads.length:allLeads.filter(l=>statusOf(l)===s).length;return`<button class="tab ${currentStatus===s?"active":""}" onclick="setPipeline('${s}')">${s} (${c})</button>`}).join("")}
+function setPipeline(s){currentStatus=s;renderPipeline();renderLeads()}
+function filteredLeads(){const q=searchInput.value.toLowerCase();const sort=sortSelect.value;let arr=allLeads.filter(l=>{const statusMatch=currentStatus==="All"||statusOf(l)===currentStatus;return statusMatch&&Object.values(l).join(" ").toLowerCase().includes(q)});if(sort==="newest")arr.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));if(sort==="oldest")arr.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));if(sort==="score")arr.sort((a,b)=>(b.score||0)-(a.score||0));return arr}
+function renderLeads(){const arr=filteredLeads();renderStats();if(!arr.length){leads.innerHTML='<div class="card empty">No leads match this view.</div>';return}leads.innerHTML=arr.map(l=>{const phone=clean(l.phone||l.callerPhone);return`<article class="lead-card"><div class="lead-top"><div class="lead-title"><h2>${clean(l.name)} · ${clean(l.jobType)}</h2><div class="badges"><span class="badge ${badgeClass(l.qualification)}">${clean(l.qualification)}</span><span class="badge status">${statusOf(l)}</span><span class="badge">Score ${l.score||0}</span><span class="badge">${clean(l.source)}</span></div></div><div class="time">${leadDate(l)}</div></div><div class="details"><div class="detail"><span>Phone</span><strong>${phone}</strong></div><div class="detail"><span>Location</span><strong>${clean(l.location)}</strong></div><div class="detail"><span>Urgency</span><strong>${clean(l.urgency)}</strong></div><div class="detail"><span>Preferred Time</span><strong>${clean(l.preferredTime)}</strong></div><div class="detail"><span>Recommended</span><strong>${clean(l.recommendedAction)}</strong></div><div class="detail"><span>Lead ID</span><strong>${clean(l.id).slice(0,8)}</strong></div></div><div class="notes"><strong>Notes:</strong> ${clean(l.notes)}</div><div class="actions"><a class="btn green small" href="tel:${phone}" onclick="markLead('${l.id}','Contacted')">Call Customer</a><button class="btn small" onclick="openTextModal('${l.id}')">Text Draft</button><button class="btn amber small" onclick="markLead('${l.id}','Quote Sent')">Quote Sent</button><button class="btn small" onclick="markLead('${l.id}','Booked')">Booked</button><button class="btn gray small" onclick="openRescheduleModal('${l.id}')">Reschedule</button><button class="btn red small" onclick="markLead('${l.id}','Lost')">Lost</button></div></article>`}).join("")}
+function renderActivity(){const recent=[...allLeads].sort((a,b)=>new Date(b.lastUpdated||b.createdAt||0)-new Date(a.lastUpdated||a.createdAt||0)).slice(0,6);activity.innerHTML=recent.length?recent.map(l=>`<div class="activity-item"><strong>${clean(l.name)} · ${statusOf(l)}</strong><span>${leadDate(l)}</span></div>`).join(""):'<div class="activity-item"><strong>No activity yet</strong><span>New calls will appear here.</span></div>'}
+async function markLead(id,status){try{const r=await fetch(`/api/leads/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});if(!r.ok)throw new Error();showToast(`Lead marked ${status}`);await loadLeads()}catch(e){showToast("Could not update lead")}}
+function findLead(id){return allLeads.find(l=>l.id===id)}
+function openTextModal(id){const l=findLead(id);activeLeadId=id;activeAction="Contacted";modalTitle.textContent="Text Draft";modalSubtitle.textContent=`Copy this text and send it to ${clean(l.name)}.`;modalBody.value=`Hi ${clean(l.name)}, this is following up on your ${clean(l.jobType)} request in ${clean(l.location)}. Are you still available around ${clean(l.preferredTime)}?`;modal.classList.add("show")}
+function openRescheduleModal(id){const l=findLead(id);activeLeadId=id;activeAction="Reschedule Needed";modalTitle.textContent="Reschedule Draft";modalSubtitle.textContent="Copy this message if the requested time does not work.";modalBody.value=`Hi ${clean(l.name)}, thanks for reaching out. The requested time may not work, but we can find another option. What other times work for you?`;modal.classList.add("show")}
+function closeModal(){modal.classList.remove("show");activeLeadId=null;activeAction=null}
+async function saveModalAction(){try{await navigator.clipboard.writeText(modalBody.value);showToast("Message copied")}catch(e){showToast("Draft ready to copy")}if(activeLeadId&&activeAction)await markLead(activeLeadId,activeAction);closeModal()}
+async function clearLeads(){if(!confirm("Clear all leads? This cannot be undone."))return;await fetch("/api/leads",{method:"DELETE"});showToast("Leads cleared");loadLeads()}
+function exportCsv(){const arr=filteredLeads();const headers=["Name","Phone","Job Type","Location","Urgency","Preferred Time","Status","Qualification","Score","Notes","Created At"];const rows=arr.map(l=>[clean(l.name),clean(l.phone||l.callerPhone),clean(l.jobType),clean(l.location),clean(l.urgency),clean(l.preferredTime),statusOf(l),clean(l.qualification),l.score||0,clean(l.notes),clean(l.createdAt)]);const csv=[headers,...rows].map(row=>row.map(c=>`"${String(c).replaceAll('"','""')}"`).join(",")).join("\n");const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="servicepilot-leads.csv";a.click();URL.revokeObjectURL(url)}
 loadLeads();
 </script>
 </body>
