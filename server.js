@@ -6,7 +6,7 @@ const fs = require("fs");
 const path = require("path");
 const twilio = require("twilio");
 const { v4: uuidv4 } = require("uuid");
-const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 
 const app = express();
 const VoiceResponse = twilio.twiml.VoiceResponse;
@@ -83,11 +83,14 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_PASSWORD
   }
 });
+
 async function sendOwnerEmail(lead) {
   if (!process.env.NOTIFICATION_EMAIL) return;
 
-  await transporter.sendMail({
-    from: process.env.EMAIL_USER,
+  const resend = new Resend(process.env.RESEND_API_KEY);
+
+  await resend.emails.send({
+    from: "ServicePilot <onboarding@resend.dev>",
     to: process.env.NOTIFICATION_EMAIL,
     subject: `New ServicePilot Lead - ${lead.qualification}`,
     text: `
