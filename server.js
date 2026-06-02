@@ -73,17 +73,6 @@ function ownerSmsText(lead) {
   ].join("\n");
 }
 
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 465,
-  secure: true,
-  connectionTimeout: 10000,
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASSWORD
-  }
-});
-
 async function sendOwnerEmail(lead) {
   if (!process.env.NOTIFICATION_EMAIL) return;
 
