@@ -171,7 +171,7 @@ app.post("/voice/job-type", (req, res) => {
   const name = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "K, what job do you need done",
+    "what job do you need done",
     `/voice/location?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(name)}`
   );
   res.type("text/xml").send(response.toString());
@@ -193,7 +193,7 @@ app.post("/voice/urgency", (req, res) => {
   const location = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "is this an Emergency or no?",
+    "is this an Emergency?",
     `/voice/preferred-time?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(location)}`
   );
   res.type("text/xml").send(response.toString());
