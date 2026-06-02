@@ -1,6 +1,7 @@
 
 require("dotenv").config();
 
+const { createClient } = require("@supabase/supabase-js");
 const express = require("express");
 const fs = require("fs");
 const path = require("path");
@@ -19,6 +20,10 @@ app.use(express.static(__dirname));
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SECRET_KEY
+);
 
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR);
 if (!fs.existsSync(LEADS_FILE)) fs.writeFileSync(LEADS_FILE, "[]");
@@ -31,11 +36,30 @@ function writeLeads(leads) {
   fs.writeFileSync(LEADS_FILE, JSON.stringify(leads, null, 2));
 }
 
-function saveLead(lead) {
-  const leads = readLeads();
-  leads.unshift(lead);
-  writeLeads(leads);
-  return lead;
+async function saveLead(lead) {
+  const { data, error } = await supabase
+    .from("leads")
+    .insert({
+      source: lead.source,
+      status: lead.status,
+      call_sid: lead.callSid,
+      caller_phone: lead.callerPhone,
+      phone: lead.phone,
+      name: lead.name,
+      job_type: lead.jobType,
+      location: lead.location,
+      urgency: lead.urgency,
+      preferred_time: lead.preferredTime,
+      notes: lead.notes,
+      score: lead.score,
+      qualification: lead.qualification,
+      recommended_action: lead.recommendedAction
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
 }
 
 function scoreLead(lead) {
@@ -248,7 +272,7 @@ app.post("/voice/finish", async (req, res) => {
       ? "Call customer now or approve appointment request"
       : "Call customer back and confirm details";
 
-  saveLead(lead);
+  await await saveLead(lead);
 
   try {
     await notifyOwner(lead);
@@ -294,7 +318,7 @@ app.post("/sms", async (req, res) => {
   lead.qualification = qualifyLead(lead.score);
   lead.recommendedAction = "Text or call customer back";
 
-  saveLead(lead);
+  await await saveLead(lead);
 
   try {
     await notifyOwner(lead);
@@ -306,8 +330,35 @@ app.post("/sms", async (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.get("/api/leads", (req, res) => {
-  res.json(readLeads());
+app.get("/api/leads", async (req, res) => {
+  const { data, error } = await supabase
+    .from("leads")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  if (error) return res.status(500).json({ error: error.message });
+
+  const leads = data.map(lead => ({
+    id: lead.id,
+    source: lead.source,
+    status: lead.status,
+    callSid: lead.call_sid,
+    callerPhone: lead.caller_phone,
+    phone: lead.phone,
+    name: lead.name,
+    jobType: lead.job_type,
+    location: lead.location,
+    urgency: lead.urgency,
+    preferredTime: lead.preferred_time,
+    notes: lead.notes,
+    score: lead.score,
+    qualification: lead.qualification,
+    recommendedAction: lead.recommended_action,
+    createdAt: lead.created_at,
+    lastUpdated: lead.last_updated
+  }));
+
+  res.json(leads);
 });
 
 app.patch("/api/leads/:id", (req, res) => {
