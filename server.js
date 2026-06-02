@@ -193,7 +193,7 @@ app.post("/voice/urgency", (req, res) => {
   const location = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "How urgent is this?",
+    "is this an Emergency or no?",
     `/voice/preferred-time?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(location)}`
   );
   res.type("text/xml").send(response.toString());
