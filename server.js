@@ -176,7 +176,7 @@ app.post("/voice/start", (req, res) => {
 
   response.say(
     { voice: "Polly.Matthew" },
-    "Thanks for calling. I'm the ServicePilot assistant. Im going to grab your info quick."
+    "whats up bitch ass double xl."
   );
 
   response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
