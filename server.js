@@ -176,7 +176,7 @@ app.post("/voice/start", (req, res) => {
 
   response.say(
     { voice: "Polly.Matthew" },
-    "whats up bitch ass double xl."
+    "Thanks for calling. I'm the ServicePilot assistant. Im going to grab your info quick."
   );
 
   response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
@@ -209,7 +209,7 @@ app.post("/voice/location", (req, res) => {
   const jobType = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "What is your general location?",
+    "Where are you located?",
     `/voice/urgency?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(jobType)}`
   );
   res.type("text/xml").send(response.toString());
