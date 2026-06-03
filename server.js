@@ -411,16 +411,6 @@ app.patch("/api/leads/:id", async (req, res) => {
   res.json(leads);
 });
 
-app.patch("/api/leads/:id", (req, res) => {
-  const leads = readLeads();
-  const index = leads.findIndex((lead) => lead.id === req.params.id);
-  if (index === -1) return res.status(404).json({ error: "Lead not found" });
-
-  leads[index] = { ...leads[index], ...req.body, lastUpdated: new Date().toISOString() };
-  writeLeads(leads);
-  res.json(leads[index]);
-});
-
 app.delete("/api/leads", (req, res) => {
   writeLeads([]);
   res.json({ ok: true });
