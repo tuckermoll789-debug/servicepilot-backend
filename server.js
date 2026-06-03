@@ -389,34 +389,6 @@ app.patch("/api/leads/:id", async (req, res) => {
   res.json(data);
 });
 
-  app.get("/api/leads", async (req, res) => {
-  const { data, error } = await supabase
-    .from("leads")
-    .select("*")
-    .order("created_at", { ascending: false });
-
-  if (error) return res.status(500).json({ error: error.message });
-
-  const leads = data.map(lead => ({
-    id: lead.id,
-    source: lead.source,
-    status: lead.status,
-    callSid: lead.call_sid,
-    callerPhone: lead.caller_phone,
-    phone: lead.phone,
-    name: lead.name,
-    jobType: lead.job_type,
-    location: lead.location,
-    urgency: lead.urgency,
-    preferredTime: lead.preferred_time,
-    notes: lead.notes,
-    score: lead.score,
-    qualification: lead.qualification,
-    recommendedAction: lead.recommended_action,
-    createdAt: lead.created_at,
-    lastUpdated: lead.last_updated
-  }));
-
   res.json(leads);
 });
 
