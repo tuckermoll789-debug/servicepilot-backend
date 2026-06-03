@@ -20,8 +20,8 @@ app.use(express.static(__dirname));
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
-const supabase = createClient(
-  process.env.SUPABASE_URL,
+const  = createClient(
+  process.env._URL,
   process.env.SUPABASE_SECRET_KEY
 );
 
@@ -53,7 +53,8 @@ async function saveLead(lead) {
       notes: lead.notes,
       score: lead.score,
       qualification: lead.qualification,
-      recommended_action: lead.recommendedAction
+      recommended_action: lead.recommendedAction,
+      company_id: lead.companyId
     })
     .select()
     .single();
@@ -275,7 +276,9 @@ app.post("/voice/finish", async (req, res) => {
       ? "Call customer now or approve appointment request"
       : "Call customer back and confirm details";
 
-  await await saveLead(lead);
+  lead.companyId = process.env.DEFAULT_COMPANY_ID;
+  
+  await saveLead(lead);
 
   try {
     await notifyOwner(lead);
