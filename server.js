@@ -340,6 +340,7 @@ app.get("/api/leads", async (req, res) => {
   const { data, error } = await supabase
     .from("leads")
     .select("*")
+    .eq("company_id", process.env.DEFAULT_COMPANY_ID)
     .order("created_at", { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
