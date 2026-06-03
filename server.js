@@ -389,28 +389,6 @@ app.patch("/api/leads/:id", async (req, res) => {
   res.json(data);
 });
 
-app.patch("/api/leads/:id", async (req, res) => {
-  const { id } = req.params;
-  const { status } = req.body;
-
-  const { data, error } = await supabase
-    .from("leads")
-    .update({
-      status,
-      last_updated: new Date().toISOString()
-    })
-    .eq("id", id)
-    .select()
-    .single();
-
-  if (error) {
-    console.error("Supabase update error:", JSON.stringify(error, null, 2));
-    return res.status(500).json({ error: error.message });
-  }
-
-  res.json(data);
-});
-
 app.listen(PORT, () => {
   console.log(`ServicePilot backend running on http://localhost:${PORT}`);
 });
