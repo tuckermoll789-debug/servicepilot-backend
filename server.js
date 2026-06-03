@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
 const  = createClient(
-  process.env._URL,
+  process.env.SUPABASE_URL,
   process.env.SUPABASE_SECRET_KEY
 );
 
