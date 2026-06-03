@@ -389,9 +389,6 @@ app.patch("/api/leads/:id", async (req, res) => {
   res.json(data);
 });
 
-  res.json(leads);
-});
-
 app.patch("/api/leads/:id", async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
