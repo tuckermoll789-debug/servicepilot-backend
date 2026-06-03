@@ -379,6 +379,7 @@ app.patch("/api/leads/:id", async (req, res) => {
       last_updated: new Date().toISOString()
     })
     .eq("id", id)
+    .eq("company_id", process.env.DEFAULT_COMPANY_ID)
     .select()
     .single();
 
