@@ -321,7 +321,7 @@ app.post("/sms", async (req, res) => {
   lead.qualification = qualifyLead(lead.score);
   lead.recommendedAction = "Text or call customer back";
 
-  await await saveLead(lead);
+  await saveLead(lead);
 
   try {
     await notifyOwner(lead);
