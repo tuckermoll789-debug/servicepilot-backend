@@ -282,6 +282,7 @@ app.post("/voice/location", (req, res) => {
 app.post("/voice/priority", (req, res) => {
   const response = new VoiceResponse();
   const priority = req.body.SpeechResult || "Not captured";
+  const location = req.query.location || "";
   sayAndGather(
     response,
     "how urgent is this — emergency, soon, or whenever available?",
