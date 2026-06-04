@@ -178,14 +178,21 @@ app.get("/", (req, res) => {
  * Twilio Voice webhook:
  * POST https://your-domain.com/voice/start
  */
-app.post("/voice/start", (req, res) => {
+app.post("/voice/start", async (req, res) => {
   const response = new VoiceResponse();
   const callSid = req.body.CallSid || "";
   const callerPhone = req.body.From || "";
+  const { data: company } = await supabase
+  .from("companies")
+  .select("business_name")
+  .eq("id", process.env.DEFAULT_COMPANY_ID)
+  .single();
+
+const businessName = company?.business_name || "the business";
 
   response.say(
     { voice: "Polly.Matthew" },
-    "Thanks for calling Test Company. I'm going to grab your info quick."
+    `Thanks for calling ${businessName}. I'm going to grab your info quick.`
   );
 
   response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
