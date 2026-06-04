@@ -102,13 +102,21 @@ function ownerSmsText(lead) {
 }
 
 async function sendOwnerEmail(lead) {
-  if (!process.env.NOTIFICATION_EMAIL) return;
+  if (!lead.companyId) return;
+
+const { data: company, error } = await supabase
+  .from("companies")
+  .select("notification_email")
+  .eq("id", lead.companyId)
+  .single();
+
+if (error || !company?.notification_email) return;
 
   const resend = new Resend(process.env.RESEND_API_KEY);
 
   await resend.emails.send({
     from: "ServicePilot <onboarding@resend.dev>",
-    to: process.env.NOTIFICATION_EMAIL,
+    to: company.notification_email,
     subject: `New ServicePilot Lead - ${lead.qualification}`,
     text: `
 Name: ${lead.name}
