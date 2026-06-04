@@ -294,6 +294,7 @@ app.post("/voice/priority", (req, res) => {
 app.post("/voice/preferred-time", (req, res) => {
   const response = new VoiceResponse();
   const preferredTime = req.body.SpeechResult || "Not captured";
+  const priority = req.query.priority || "";
   sayAndGather(
     response,
     "When are you free for a call back?",
