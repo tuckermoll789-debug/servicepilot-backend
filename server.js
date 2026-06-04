@@ -236,9 +236,7 @@ app.post("/voice/start", async (req, res) => {
 
 const businessName = company?.business_name || "the business";
 
-const introPrompt =
-  company?.ai_prompt ||
-  `Thanks for calling ${businessName}. I'm going to grab your info quick.`;
+const introPrompt = `Thanks for calling ${businessName}. I'm going to grab your info quick.`;
 
   response.say(
   { voice: "Polly.Matthew" },
