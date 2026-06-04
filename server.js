@@ -184,16 +184,20 @@ app.post("/voice/start", async (req, res) => {
   const callerPhone = req.body.From || "";
   const { data: company } = await supabase
   .from("companies")
-  .select("business_name")
+  .select("business_name, ai_prompt")
   .eq("id", process.env.DEFAULT_COMPANY_ID)
   .single();
 
 const businessName = company?.business_name || "the business";
 
+const introPrompt =
+  company?.ai_prompt ||
+  `Thanks for calling ${businessName}. I'm going to grab your info quick.`;
+
   response.say(
-    { voice: "Polly.Matthew" },
-    `Thanks for calling ${businessName}. I'm going to grab your info quick.`
-  );
+  { voice: "Polly.Matthew" },
+  introPrompt
+);
 
   response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
   res.type("text/xml").send(response.toString());
