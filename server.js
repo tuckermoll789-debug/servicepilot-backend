@@ -54,7 +54,7 @@ async function saveLead(lead) {
       name: lead.name,
       job_type: lead.jobType,
       location: lead.location,
-      urgency: lead.urgency,
+      priority: lead.priority,
       preferred_time: lead.preferredTime,
       notes: lead.notes,
       score: lead.score,
@@ -114,7 +114,7 @@ Return ONLY valid JSON:
 
 function scoreLead(lead) {
   let score = 0;
-  const text = `${lead.jobType || ""} ${lead.urgency || ""} ${lead.notes || ""}`.toLowerCase();
+  const text = `${lead.jobType || ""} ${lead.priority || ""} ${lead.notes || ""}`.toLowerCase();
 
   if (text.includes("emergency")) score += 40;
   if (text.includes("leak")) score += 35;
@@ -140,7 +140,7 @@ function ownerSmsText(lead) {
     `Phone: ${lead.phone || lead.callerPhone || "Not captured"}`,
     `Job: ${lead.jobType || "Not captured"}`,
     `Location: ${lead.location || "Not captured"}`,
-    `Urgency: ${lead.urgency || "Not captured"}`,
+    `priority: ${lead.priority || "Not captured"}`,
     `Preferred time: ${lead.preferredTime || "Not captured"}`,
     `Score: ${lead.score}`,
     `Action: Call back, text, approve appointment, or reschedule.`
@@ -169,7 +169,7 @@ Name: ${lead.name}
 Phone: ${lead.phone || lead.callerPhone}
 Job Type: ${lead.jobType}
 Location: ${lead.location}
-Urgency: ${lead.urgency}
+priority: ${lead.priority}
 Preferred Time: ${lead.preferredTime}
 
 Notes:
@@ -274,17 +274,17 @@ app.post("/voice/location", (req, res) => {
   sayAndGather(
     response,
     "Where are you located?",
-    `/voice/urgency?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(jobType)}`
+    `/voice/priority?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(jobType)}`
   );
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/urgency", (req, res) => {
+app.post("/voice/priority", (req, res) => {
   const response = new VoiceResponse();
-  const location = req.body.SpeechResult || "Not captured";
+  const priority = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "is this an Emergency?",
+    "how urgent is this — emergency, soon, or whenever available?",
     `/voice/preferred-time?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(location)}`
   );
   res.type("text/xml").send(response.toString());
@@ -292,11 +292,11 @@ app.post("/voice/urgency", (req, res) => {
 
 app.post("/voice/preferred-time", (req, res) => {
   const response = new VoiceResponse();
-  const urgency = req.body.SpeechResult || "Not captured";
+  const preferredTime = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
     "When are you free for a call back?",
-    `/voice/notes?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(urgency)}`
+    `/voice/notes?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&priority=${encodeURIComponent(priority)}`
   );
   res.type("text/xml").send(response.toString());
 });
@@ -307,7 +307,7 @@ app.post("/voice/notes", (req, res) => {
   sayAndGather(
     response,
     "Any other details you need to say now?",
-    `/voice/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(req.query.urgency || "")}&preferredTime=${encodeURIComponent(preferredTime)}`
+    `/voice/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&priority=${encodeURIComponent(req.query.priority || "")}&preferredTime=${encodeURIComponent(preferredTime)}`
   );
   res.type("text/xml").send(response.toString());
 });
@@ -326,7 +326,7 @@ app.post("/voice/finish", async (req, res) => {
     name: req.query.name || "Not captured",
     jobType: req.query.jobType || "Not captured",
     location: req.query.location || "Not captured",
-    urgency: req.query.urgency || "Not captured",
+    priority: req.query.priority || "Not captured",
     preferredTime: req.query.preferredTime || "Not captured",
     notes,
     createdAt: new Date().toISOString()
@@ -379,7 +379,7 @@ app.post("/sms", async (req, res) => {
     name: "SMS Lead",
     jobType: body,
     location: "Not captured",
-    urgency: body,
+    priority: body,
     preferredTime: "Not captured",
     notes: body,
     createdAt: new Date().toISOString()
@@ -425,7 +425,7 @@ app.get("/api/leads", async (req, res) => {
     name: lead.name,
     jobType: lead.job_type,
     location: lead.location,
-    urgency: lead.urgency,
+    priority: lead.priority,
     preferredTime: lead.preferred_time,
     notes: lead.notes,
     score: lead.score,
