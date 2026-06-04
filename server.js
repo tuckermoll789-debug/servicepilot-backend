@@ -8,8 +8,14 @@ const path = require("path");
 const twilio = require("twilio");
 const { v4: uuidv4 } = require("uuid");
 const { Resend } = require("resend");
+const OpenAI = require("openai");
 
 const app = express();
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+
 const VoiceResponse = twilio.twiml.VoiceResponse;
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
