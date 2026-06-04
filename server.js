@@ -334,13 +334,15 @@ app.post("/voice/finish", async (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  lead.score = scoreLead(lead);
-  lead.qualification = qualifyLead(lead.score);
-  lead.recommendedAction =
-    lead.score >= 70
-      ? "Call customer now or approve appointment request"
-      : "Call customer back and confirm details";
+  const aiAnalysis = await analyzeLeadWithAI(lead);
 
+lead.score = aiAnalysis.score;
+lead.qualification = aiAnalysis.qualification;
+lead.recommendedAction = aiAnalysis.recommendedAction;
+lead.notes = lead.notes
+  ? `${lead.notes}\n\nAI Summary: ${aiAnalysis.summary}`
+  : aiAnalysis.summary;
+  
   lead.companyId = process.env.DEFAULT_COMPANY_ID;
   
   await saveLead(lead);
@@ -385,9 +387,14 @@ app.post("/sms", async (req, res) => {
     createdAt: new Date().toISOString()
   };
 
-  lead.score = scoreLead(lead);
-  lead.qualification = qualifyLead(lead.score);
-  lead.recommendedAction = "Text or call customer back";
+  const aiAnalysis = await analyzeLeadWithAI(lead);
+
+lead.score = aiAnalysis.score;
+lead.qualification = aiAnalysis.qualification;
+lead.recommendedAction = aiAnalysis.recommendedAction;
+lead.notes = lead.notes
+  ? `${lead.notes}\n\nAI Summary: ${aiAnalysis.summary}`
+  : aiAnalysis.summary;
 
   await saveLead(lead);
 
