@@ -72,6 +72,46 @@ async function saveLead(lead) {
   return data;
 }
 
+async function analyzeLeadWithAI(lead) {
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are a lead qualification assistant.
+
+Return ONLY valid JSON:
+
+{
+  "score": number,
+  "qualification": "Hot Lead" | "Warm Lead" | "Cold Lead",
+  "recommendedAction": string,
+  "summary": string
+}`
+        },
+        {
+          role: "user",
+          content: JSON.stringify(lead)
+        }
+      ],
+      response_format: { type: "json_object" }
+    });
+
+    return JSON.parse(completion.choices[0].message.content);
+
+  } catch (error) {
+    console.error("AI analysis failed:", error.message);
+
+    return {
+      score: 50,
+      qualification: "Needs Review",
+      recommendedAction: "Call customer back",
+      summary: "AI analysis unavailable"
+    };
+  }
+}
+
 function scoreLead(lead) {
   let score = 0;
   const text = `${lead.jobType || ""} ${lead.urgency || ""} ${lead.notes || ""}`.toLowerCase();
