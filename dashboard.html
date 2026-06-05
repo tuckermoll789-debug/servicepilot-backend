@@ -49,13 +49,17 @@ textarea{width:100%;min-height:140px;border:1px solid #cbd5e1;border-radius:18px
 .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#0f172a;color:white;padding:13px 16px;border-radius:999px;font-weight:900;display:none;z-index:80}
 .toast.show{display:block}
+.login-screen{min-height:100vh;display:grid;place-items:center;padding:24px}
+.login-panel{background:white;border:1px solid #e2e8f0;border-radius:26px;padding:30px;box-shadow:0 18px 50px rgba(15,23,42,.055);width:min(440px,100%)}
+.login-panel h1{font-size:34px;margin-bottom:8px}.login-form{display:grid;gap:12px;margin-top:22px}.login-form input{width:100%;min-width:0}.auth-message{min-height:22px;color:#64748b;font-weight:800;font-size:14px}
 @media(max-width:980px){.hero,.main{display:block}.stats{grid-template-columns:repeat(2,1fr)}.details{grid-template-columns:1fr}.side{position:static;margin-top:18px}input{min-width:0;width:100%}.toolbar,.filters{display:grid;width:100%}}
 </style>
 </head>
 <body>
-<nav class="nav"><div class="nav-inner"><div class="logo"><div class="logo-mark">SP</div>ServicePilot</div><div><button class="btn gray" onclick="loadLeads()">Refresh</button> <button class="btn red" onclick="clearLeads()">Clear Demo Leads</button></div></div></nav>
-<main class="wrap">
-<section class="hero"><div><h1>Lead Dashboard</h1><p>Manage every call, callback, appointment request, and booked job in one place.</p></div><a class="btn dark" href="/api/leads" target="_blank">View Raw Leads</a></section>
+<section class="login-screen" id="loginScreen"><div class="login-panel"><div class="logo"><div class="logo-mark">SP</div>ServicePilot</div><h1>Sign in</h1><p>Use your customer email to access your lead dashboard.</p><div class="login-form"><input id="emailInput" type="email" autocomplete="email" placeholder="you@example.com"><button class="btn" id="loginButton" onclick="sendLoginLink()">Send login link</button><div class="auth-message" id="authMessage"></div></div></div></section>
+<nav class="nav" id="dashboardNav" hidden><div class="nav-inner"><div class="logo"><div class="logo-mark">SP</div>ServicePilot</div><div><button class="btn gray" onclick="loadLeads()">Refresh</button> <button class="btn red" onclick="clearLeads()">Clear Demo Leads</button> <button class="btn dark" onclick="logout()">Logout</button></div></div></nav>
+<main class="wrap" id="dashboardMain" hidden>
+<section class="hero"><div><h1>Lead Dashboard</h1><p>Manage every call, callback, appointment request, and booked job in one place.</p></div><button class="btn dark" onclick="openRawLeads()">View Raw Leads</button></section>
 <section class="stats"><div class="card stat"><strong id="totalCount">0</strong><span>Total Leads</span></div><div class="card stat"><strong id="newCount">0</strong><span>New</span></div><div class="card stat"><strong id="contactedCount">0</strong><span>Contacted</span></div><div class="card stat"><strong id="bookedCount">0</strong><span>Booked</span></div><div class="card stat"><strong id="highCount">0</strong><span>High Intent</span></div></section>
 <section class="toolbar"><div class="filters"><input id="searchInput" placeholder="Search name, phone, job, city..." oninput="renderLeads()"><select id="sortSelect" onchange="renderLeads()"><option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="score">Highest score</option></select></div><button class="btn gray small" onclick="exportCsv()">Export CSV</button></section>
 <section class="pipeline" id="pipeline"></section>
@@ -63,53 +67,41 @@ textarea{width:100%;min-height:140px;border:1px solid #cbd5e1;border-radius:18px
 </main>
 <div class="modal" id="modal"><div class="modal-card"><h2 id="modalTitle">Action</h2><p id="modalSubtitle" style="margin-bottom:14px;"></p><textarea id="modalBody"></textarea><div class="modal-actions"><button class="btn gray" onclick="closeModal()">Cancel</button><button class="btn" onclick="saveModalAction()">Save</button></div></div></div>
 <div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
-let allLeads=[];let currentStatus="All";let activeLeadId=null;let activeAction=null;
+let allLeads=[];let currentStatus="All";let activeLeadId=null;let activeAction=null;let supabaseClient=null;let currentSession=null;let loginCooldownUntil=0;
 const statuses=["All","New","Contacted","Quote Sent","Booked","Lost","Appointment Approved","Reschedule Needed","Declined"];
 function showToast(m){toast.textContent=m;toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),2400)}
 function clean(v){if(v===undefined||v===null||v==="")return"Not captured";return String(v).replace(/\s+/g," ").trim()}
 function leadDate(l){return l.createdAt?new Date(l.createdAt).toLocaleString():""}
 function statusOf(l){return l.status||"New"}
 function badgeClass(q){if(q==="High intent")return"high";if(q==="Medium intent")return"medium";return"low"}
-async function loadLeads(){try{const r=await fetch("/api/leads");allLeads=await r.json();renderPipeline();renderLeads();renderActivity()}catch(e){leads.innerHTML='<div class="card empty">Could not load leads. Check Render logs.</div>'}}
+function showLogin(message=""){dashboardNav.hidden=true;dashboardMain.hidden=true;loginScreen.hidden=false;allLeads=[];authMessage.textContent=message}
+function showDashboard(){loginScreen.hidden=true;dashboardNav.hidden=false;dashboardMain.hidden=false}
+async function refreshSession(){if(!supabaseClient)return null;const {data}=await supabaseClient.auth.getSession();currentSession=data.session;return currentSession}
+async function authenticatedHeaders(extra={}){const session=await refreshSession();if(!session?.access_token)throw new Error("No active session");return {...extra,Authorization:`Bearer ${session.access_token}`}}
+async function handleApiError(r){if(r.status===401){showLogin();throw new Error("Unauthorized")}if(r.status===403){showLogin("Your ServicePilot account is not active.");throw new Error("Forbidden")}throw new Error("Request failed")}
+function startLoginCooldown(){loginCooldownUntil=Date.now()+30000;loginButton.disabled=true;setTimeout(()=>{if(Date.now()>=loginCooldownUntil)loginButton.disabled=false},30000)}
+async function sendLoginLink(){const email=emailInput.value.trim();authMessage.textContent="";if(Date.now()<loginCooldownUntil){authMessage.textContent="Please wait a moment before requesting another link.";return}if(!email){authMessage.textContent="Enter your email address.";return}try{startLoginCooldown();const {error}=await supabaseClient.auth.signInWithOtp({email,options:{emailRedirectTo:`${window.location.origin}/dashboard.html`,shouldCreateUser:false}});if(error)console.error("Login link request failed:",error.message);authMessage.textContent="Check your email for your ServicePilot login link."}catch(e){loginButton.disabled=false;loginCooldownUntil=0;authMessage.textContent="Could not send a login link right now."}}
+async function logout(){if(supabaseClient)await supabaseClient.auth.signOut();allLeads=[];renderPipeline();renderLeads();renderActivity();showLogin()}
+async function loadLeads(){try{const headers=await authenticatedHeaders();const r=await fetch("/api/leads",{headers});if(!r.ok)await handleApiError(r);allLeads=await r.json();showDashboard();renderPipeline();renderLeads();renderActivity()}catch(e){if(!currentSession){showLogin();return}leads.innerHTML='<div class="card empty">Could not load leads.</div>'}}
 function renderStats(){totalCount.textContent=allLeads.length;newCount.textContent=allLeads.filter(l=>statusOf(l)==="New").length;contactedCount.textContent=allLeads.filter(l=>["Contacted","Quote Sent","Booked"].includes(statusOf(l))).length;bookedCount.textContent=allLeads.filter(l=>["Booked","Appointment Approved"].includes(statusOf(l))).length;highCount.textContent=allLeads.filter(l=>l.qualification==="High intent").length}
 function renderPipeline(){pipeline.innerHTML=statuses.map(s=>{const c=s==="All"?allLeads.length:allLeads.filter(l=>statusOf(l)===s).length;return`<button class="tab ${currentStatus===s?"active":""}" onclick="setPipeline('${s}')">${s} (${c})</button>`}).join("")}
 function setPipeline(s){currentStatus=s;renderPipeline();renderLeads()}
 function filteredLeads(){const q=searchInput.value.toLowerCase();const sort=sortSelect.value;let arr=allLeads.filter(l=>{const statusMatch=currentStatus==="All"||statusOf(l)===currentStatus;return statusMatch&&Object.values(l).join(" ").toLowerCase().includes(q)});if(sort==="newest")arr.sort((a,b)=>new Date(b.createdAt||0)-new Date(a.createdAt||0));if(sort==="oldest")arr.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));if(sort==="score")arr.sort((a,b)=>(b.score||0)-(a.score||0));return arr}
-function renderLeads(){const arr=filteredLeads();renderStats();if(!arr.length){leads.innerHTML='<div class="card empty">No leads match this view.</div>';return}leads.innerHTML=arr.map(l=>{const phone=clean(l.phone||l.callerPhone);return`<article class="lead-card"><div class="lead-top"><div class="lead-title"><h2>${clean(l.name)} · ${clean(l.jobType)}</h2><div class="badges"><span class="badge ${badgeClass(l.qualification)}">${clean(l.qualification)}</span><span class="badge status">${statusOf(l)}</span><span class="badge">Score ${l.score||0}</span><span class="badge">${clean(l.source)}</span></div></div><div class="time">${leadDate(l)}</div></div><div class="details"><div class="detail"><span>Phone</span><strong>${phone}</strong></div><div class="detail"><span>Location</span><strong>${clean(l.location)}</strong></div><div class="detail"><span>priority</span><strong>${clean(l.priority)}</strong></div><div class="detail"><span>Preferred Time</span><strong>${clean(l.preferredTime)}</strong></div><div class="detail"><span>Recommended</span><strong>${clean(l.recommendedAction)}</strong></div><div class="detail"><span>Lead ID</span><strong>${clean(l.id).slice(0,8)}</strong></div></div><div class="notes"><strong>Notes:</strong> ${clean(l.notes)}</div><div class="actions"><button class="btn dark small" onclick="openLeadDetails('${l.id}')">View Details</button><a class="btn green small" href="tel:${phone}" onclick="markLead('${l.id}','Contacted')">Call Customer</a><button class="btn small" onclick="openTextModal('${l.id}')">Text Draft</button><button class="btn amber small" onclick="markLead('${l.id}','Quote Sent')">Quote Sent</button><button class="btn small" onclick="markLead('${l.id}','Booked')">Booked</button><button class="btn gray small" onclick="openRescheduleModal('${l.id}')">Reschedule</button><button class="btn red small" onclick="markLead('${l.id}','Lost')">Lost</button></div></article>`}).join("")}
+function renderLeads(){const arr=filteredLeads();renderStats();if(!arr.length){leads.innerHTML='<div class="card empty">No leads match this view.</div>';return}leads.innerHTML=arr.map(l=>{const phone=clean(l.phone||l.callerPhone);return`<article class="lead-card"><div class="lead-top"><div class="lead-title"><h2>${clean(l.name)} · ${clean(l.jobType)}</h2><div class="badges"><span class="badge ${badgeClass(l.qualification)}">${clean(l.qualification)}</span><span class="badge status">${statusOf(l)}</span><span class="badge">Score ${l.score||0}</span><span class="badge">${clean(l.source)}</span></div></div><div class="time">${leadDate(l)}</div></div><div class="details"><div class="detail"><span>Phone</span><strong>${phone}</strong></div><div class="detail"><span>Location</span><strong>${clean(l.location)}</strong></div><div class="detail"><span>Urgency</span><strong>${clean(l.urgency)}</strong></div><div class="detail"><span>Preferred Time</span><strong>${clean(l.preferredTime)}</strong></div><div class="detail"><span>Recommended</span><strong>${clean(l.recommendedAction)}</strong></div><div class="detail"><span>Lead ID</span><strong>${clean(l.id).slice(0,8)}</strong></div></div><div class="notes"><strong>Notes:</strong> ${clean(l.notes)}</div><div class="actions"><a class="btn green small" href="tel:${phone}" onclick="markLead('${l.id}','Contacted')">Call Customer</a><button class="btn small" onclick="openTextModal('${l.id}')">Text Draft</button><button class="btn amber small" onclick="markLead('${l.id}','Quote Sent')">Quote Sent</button><button class="btn small" onclick="markLead('${l.id}','Booked')">Booked</button><button class="btn gray small" onclick="openRescheduleModal('${l.id}')">Reschedule</button><button class="btn red small" onclick="markLead('${l.id}','Lost')">Lost</button></div></article>`}).join("")}
 function renderActivity(){const recent=[...allLeads].sort((a,b)=>new Date(b.lastUpdated||b.createdAt||0)-new Date(a.lastUpdated||a.createdAt||0)).slice(0,6);activity.innerHTML=recent.length?recent.map(l=>`<div class="activity-item"><strong>${clean(l.name)} · ${statusOf(l)}</strong><span>${leadDate(l)}</span></div>`).join(""):'<div class="activity-item"><strong>No activity yet</strong><span>New calls will appear here.</span></div>'}
-async function markLead(id,status){try{const r=await fetch(`/api/leads/${id}`,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});if(!r.ok)throw new Error();showToast(`Lead marked ${status}`);await loadLeads()}catch(e){showToast("Could not update lead")}}
+async function markLead(id,status){try{const headers=await authenticatedHeaders({"Content-Type":"application/json"});const r=await fetch(`/api/leads/${id}`,{method:"PATCH",headers,body:JSON.stringify({status})});if(!r.ok)await handleApiError(r);showToast(`Lead marked ${status}`);await loadLeads()}catch(e){showToast("Could not update lead")}}
+async function openRawLeads(){try{const headers=await authenticatedHeaders();const r=await fetch("/api/leads",{headers});if(!r.ok)await handleApiError(r);const data=await r.json();const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);window.open(url,"_blank");setTimeout(()=>URL.revokeObjectURL(url),30000)}catch(e){showToast("Could not open raw leads")}}
 function findLead(id){return allLeads.find(l=>l.id===id)}
-function openLeadDetails(id){
-  const l = findLead(id);
-  modalTitle.textContent = `${clean(l.name)} · ${clean(l.jobType)}`;
-  modalSubtitle.textContent = `${clean(l.qualification)} · Score ${l.score || 0}`;
-
-  modalBody.value =
-`Phone: ${clean(l.phone || l.callerPhone)}
-Location: ${clean(l.location)}
-priority: ${clean(l.priority)}
-Preferred Time: ${clean(l.preferredTime)}
-Status: ${statusOf(l)}
-
-Notes:
-${clean(l.notes)}
-
-Recommended Action:
-${clean(l.recommendedAction)}
-
-Created:
-${leadDate(l)}`;
-
-  modal.classList.add("show");
-}
 function openTextModal(id){const l=findLead(id);activeLeadId=id;activeAction="Contacted";modalTitle.textContent="Text Draft";modalSubtitle.textContent=`Copy this text and send it to ${clean(l.name)}.`;modalBody.value=`Hi ${clean(l.name)}, this is following up on your ${clean(l.jobType)} request in ${clean(l.location)}. Are you still available around ${clean(l.preferredTime)}?`;modal.classList.add("show")}
 function openRescheduleModal(id){const l=findLead(id);activeLeadId=id;activeAction="Reschedule Needed";modalTitle.textContent="Reschedule Draft";modalSubtitle.textContent="Copy this message if the requested time does not work.";modalBody.value=`Hi ${clean(l.name)}, thanks for reaching out. The requested time may not work, but we can find another option. What other times work for you?`;modal.classList.add("show")}
 function closeModal(){modal.classList.remove("show");activeLeadId=null;activeAction=null}
 async function saveModalAction(){try{await navigator.clipboard.writeText(modalBody.value);showToast("Message copied")}catch(e){showToast("Draft ready to copy")}if(activeLeadId&&activeAction)await markLead(activeLeadId,activeAction);closeModal()}
-async function clearLeads(){if(!confirm("Clear all leads? This cannot be undone."))return;await fetch("/api/leads",{method:"DELETE"});showToast("Leads cleared");loadLeads()}
-function exportCsv(){const arr=filteredLeads();const headers=["Name","Phone","Job Type","Location","priority","Preferred Time","Status","Qualification","Score","Notes","Created At"];const rows=arr.map(l=>[clean(l.name),clean(l.phone||l.callerPhone),clean(l.jobType),clean(l.location),clean(l.priority),clean(l.preferredTime),statusOf(l),clean(l.qualification),l.score||0,clean(l.notes),clean(l.createdAt)]);const csv=[headers,...rows].map(row=>row.map(c=>`"${String(c).replaceAll('"','""')}"`).join(",")).join("\n");const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="servicepilot-leads.csv";a.click();URL.revokeObjectURL(url)}
-loadLeads();
+async function clearLeads(){if(!confirm("Clear all leads? This cannot be undone."))return;try{const headers=await authenticatedHeaders();const r=await fetch("/api/leads",{method:"DELETE",headers});if(!r.ok)await handleApiError(r);showToast("Leads cleared");loadLeads()}catch(e){showToast("Could not clear leads")}}
+function exportCsv(){const arr=filteredLeads();const headers=["Name","Phone","Job Type","Location","Urgency","Preferred Time","Status","Qualification","Score","Notes","Created At"];const rows=arr.map(l=>[clean(l.name),clean(l.phone||l.callerPhone),clean(l.jobType),clean(l.location),clean(l.urgency),clean(l.preferredTime),statusOf(l),clean(l.qualification),l.score||0,clean(l.notes),clean(l.createdAt)]);const csv=[headers,...rows].map(row=>row.map(c=>`"${String(c).replaceAll('"','""')}"`).join(",")).join("\n");const blob=new Blob([csv],{type:"text/csv"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="servicepilot-leads.csv";a.click();URL.revokeObjectURL(url)}
+async function initAuth(){try{const r=await fetch("/api/auth-config");if(!r.ok)throw new Error("Config unavailable");const config=await r.json();supabaseClient=window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey);const session=await refreshSession();if(!session){showLogin();return}await loadLeads();supabaseClient.auth.onAuthStateChange((_event,session)=>{currentSession=session;if(session)loadLeads();else showLogin()})}catch(e){showLogin("Could not load ServicePilot sign in.")}}
+initAuth();
 </script>
 </body>
 </html>

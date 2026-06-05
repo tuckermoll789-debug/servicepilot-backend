@@ -15,11 +15,11 @@ const MessagingResponse = twilio.twiml.MessagingResponse;
 
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
-app.use(express.static(__dirname));
 
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
+const DASHBOARD_FILE = path.join(__dirname, "dashboard.html");
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SECRET_KEY
@@ -46,6 +46,50 @@ async function findCompanyByTwilioNumber(twilioNumber, columns) {
   if (error) throw error;
 
   return data && data[0];
+}
+
+async function requireCompanyAuth(req, res, next) {
+  const authHeader = req.get("Authorization") || "";
+  const authParts = authHeader.split(" ");
+  const [scheme, accessToken] = authParts;
+
+  if (authParts.length !== 2 || scheme !== "Bearer" || !accessToken) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+
+    if (authError || !authData?.user?.id) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const { data: companyUsers, error: companyUserError } = await supabase
+      .from("company_users")
+      .select("company_id, role")
+      .eq("auth_user_id", authData.user.id)
+      .eq("active", true)
+      .limit(1);
+
+    if (companyUserError) {
+      console.error("Company auth lookup failed:", companyUserError.message);
+      return res.status(500).json({ error: "Authentication failed" });
+    }
+
+    const companyUser = companyUsers && companyUsers[0];
+
+    if (!companyUser) {
+      return res.status(403).json({ error: "Account is not active" });
+    }
+
+    req.authUserId = authData.user.id;
+    req.companyId = companyUser.company_id;
+    req.companyRole = companyUser.role;
+    next();
+  } catch (error) {
+    console.error("Company auth failed:", error.message);
+    return res.status(500).json({ error: "Authentication failed" });
+  }
 }
 
 async function saveLead(lead) {
@@ -187,7 +231,19 @@ function sayAndGather(response, prompt, actionUrl) {
 }
 
 app.get("/", (req, res) => {
-  res.redirect("/dashboard.html");
+  res.sendFile(DASHBOARD_FILE);
+});
+
+app.get("/dashboard.html", (req, res) => {
+  res.sendFile(DASHBOARD_FILE);
+});
+
+app.get("/api/auth-config", (req, res) => {
+  res.json({
+    supabaseUrl: process.env.SUPABASE_URL,
+    supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
+    appOrigin: process.env.APP_ORIGIN
+  });
 });
 
 /**
@@ -453,11 +509,11 @@ app.post("/sms", async (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.get("/api/leads", async (req, res) => {
+app.get("/api/leads", requireCompanyAuth, async (req, res) => {
   const { data, error } = await supabase
     .from("leads")
     .select("*")
-    .eq("company_id", process.env.DEFAULT_COMPANY_ID)
+    .eq("company_id", req.companyId)
     .order("created_at", { ascending: false });
 
   if (error) return res.status(500).json({ error: error.message });
@@ -486,7 +542,7 @@ app.get("/api/leads", async (req, res) => {
   res.json(leads);
 });
 
-app.patch("/api/leads/:id", async (req, res) => {
+app.patch("/api/leads/:id", requireCompanyAuth, async (req, res) => {
   const { id } = req.params;
   const { status } = req.body;
 
@@ -497,13 +553,17 @@ app.patch("/api/leads/:id", async (req, res) => {
       last_updated: new Date().toISOString()
     })
     .eq("id", id)
-    .eq("company_id", process.env.DEFAULT_COMPANY_ID)
+    .eq("company_id", req.companyId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     console.error("Supabase update error:", JSON.stringify(error, null, 2));
     return res.status(500).json({ error: error.message });
+  }
+
+  if (!data) {
+    return res.status(404).json({ error: "Lead not found" });
   }
 
   res.json(data);
