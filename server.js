@@ -281,8 +281,7 @@ app.post("/voice/location", (req, res) => {
 
 app.post("/voice/priority", (req, res) => {
   const response = new VoiceResponse();
-  const priority = req.body.SpeechResult || "Not captured";
-  const location = req.query.location || "";
+  const location = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
     "how urgent is this — emergency, soon, or whenever available?",
@@ -293,8 +292,8 @@ app.post("/voice/priority", (req, res) => {
 
 app.post("/voice/preferred-time", (req, res) => {
   const response = new VoiceResponse();
-  const preferredTime = req.body.SpeechResult || "Not captured";
-  const priority = req.query.priority || "";
+  const priority = req.body.SpeechResult || "Not captured";
+  const location = req.query.location || "";
   sayAndGather(
     response,
     "When are you free for a call back?",
@@ -306,6 +305,8 @@ app.post("/voice/preferred-time", (req, res) => {
 app.post("/voice/notes", (req, res) => {
   const response = new VoiceResponse();
   const preferredTime = req.body.SpeechResult || "Not captured";
+  const location = req.query.location || "";
+  const priority = req.query.priority || "";
   sayAndGather(
     response,
     "Any other details you need to say now?",
