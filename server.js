@@ -64,7 +64,7 @@ async function saveLead(lead) {
       name: lead.name,
       job_type: lead.jobType,
       location: lead.location,
-      urgency: lead.urgency,
+      priority: lead.priority || lead.urgency || "Not captured",
       preferred_time: lead.preferredTime,
       notes: lead.notes,
       score: lead.score,
@@ -355,7 +355,14 @@ app.post("/voice/finish", async (req, res) => {
       ? "Call customer now or approve appointment request"
       : "Call customer back and confirm details";
 
-  await saveLead(lead);
+  try {
+    await saveLead(lead);
+  } catch (error) {
+    console.error("Voice lead not created: Supabase save failed.", error.message);
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your request right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
 
   try {
     await notifyOwner(lead);
@@ -426,7 +433,12 @@ app.post("/sms", async (req, res) => {
   lead.qualification = qualifyLead(lead.score);
   lead.recommendedAction = "Text or call customer back";
 
-  await saveLead(lead);
+  try {
+    await saveLead(lead);
+  } catch (error) {
+    console.error("SMS lead not created: Supabase save failed.", error.message);
+    return res.type("text/xml").send(response.toString());
+  }
 
   try {
     await notifyOwner(lead);
@@ -457,7 +469,7 @@ app.get("/api/leads", async (req, res) => {
     name: lead.name,
     jobType: lead.job_type,
     location: lead.location,
-    urgency: lead.urgency,
+    urgency: lead.priority,
     preferredTime: lead.preferred_time,
     notes: lead.notes,
     score: lead.score,
