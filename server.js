@@ -8,14 +8,8 @@ const path = require("path");
 const twilio = require("twilio");
 const { v4: uuidv4 } = require("uuid");
 const { Resend } = require("resend");
-const OpenAI = require("openai");
 
 const app = express();
-
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
-});
-
 const VoiceResponse = twilio.twiml.VoiceResponse;
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
@@ -42,7 +36,23 @@ function writeLeads(leads) {
   fs.writeFileSync(LEADS_FILE, JSON.stringify(leads, null, 2));
 }
 
+async function findCompanyByTwilioNumber(twilioNumber, columns) {
+  const { data, error } = await supabase
+    .from("companies")
+    .select(columns)
+    .eq("twilio_number", twilioNumber)
+    .limit(1);
+
+  if (error) throw error;
+
+  return data && data[0];
+}
+
 async function saveLead(lead) {
+  if (!lead.companyId) {
+    throw new Error("Cannot save lead without companyId");
+  }
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
@@ -54,7 +64,7 @@ async function saveLead(lead) {
       name: lead.name,
       job_type: lead.jobType,
       location: lead.location,
-      priority: lead.priority,
+      urgency: lead.urgency,
       preferred_time: lead.preferredTime,
       notes: lead.notes,
       score: lead.score,
@@ -72,49 +82,9 @@ async function saveLead(lead) {
   return data;
 }
 
-async function analyzeLeadWithAI(lead) {
-  try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
-      messages: [
-        {
-          role: "system",
-          content: `You are a lead qualification assistant.
-
-Return ONLY valid JSON:
-
-{
-  "score": number,
-  "qualification": "Hot Lead" | "Warm Lead" | "Cold Lead",
-  "recommendedAction": string,
-  "summary": string
-}`
-        },
-        {
-          role: "user",
-          content: JSON.stringify(lead)
-        }
-      ],
-      response_format: { type: "json_object" }
-    });
-
-    return JSON.parse(completion.choices[0].message.content);
-
-  } catch (error) {
-    console.error("AI analysis failed:", error.message);
-
-    return {
-      score: 50,
-      qualification: "Needs Review",
-      recommendedAction: "Call customer back",
-      summary: "AI analysis unavailable"
-    };
-  }
-}
-
 function scoreLead(lead) {
   let score = 0;
-  const text = `${lead.jobType || ""} ${lead.priority || ""} ${lead.notes || ""}`.toLowerCase();
+  const text = `${lead.jobType || ""} ${lead.urgency || ""} ${lead.notes || ""}`.toLowerCase();
 
   if (text.includes("emergency")) score += 40;
   if (text.includes("leak")) score += 35;
@@ -140,7 +110,7 @@ function ownerSmsText(lead) {
     `Phone: ${lead.phone || lead.callerPhone || "Not captured"}`,
     `Job: ${lead.jobType || "Not captured"}`,
     `Location: ${lead.location || "Not captured"}`,
-    `priority: ${lead.priority || "Not captured"}`,
+    `Urgency: ${lead.urgency || "Not captured"}`,
     `Preferred time: ${lead.preferredTime || "Not captured"}`,
     `Score: ${lead.score}`,
     `Action: Call back, text, approve appointment, or reschedule.`
@@ -169,7 +139,7 @@ Name: ${lead.name}
 Phone: ${lead.phone || lead.callerPhone}
 Job Type: ${lead.jobType}
 Location: ${lead.location}
-priority: ${lead.priority}
+Urgency: ${lead.urgency}
 Preferred Time: ${lead.preferredTime}
 
 Notes:
@@ -228,20 +198,39 @@ app.post("/voice/start", async (req, res) => {
   const response = new VoiceResponse();
   const callSid = req.body.CallSid || "";
   const callerPhone = req.body.From || "";
-  const { data: company } = await supabase
-  .from("companies")
-  .select("business_name, ai_prompt")
-  .eq("id", process.env.DEFAULT_COMPANY_ID)
-  .single();
+  const to = req.body.To || "";
+
+  if (!to) {
+    console.error("Voice call not started: missing inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not route this call right now. Please try again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  let company;
+
+  try {
+    company = await findCompanyByTwilioNumber(to, "id, business_name");
+  } catch (error) {
+    console.error("Voice call not started: company lookup failed for inbound Twilio number.", error.message);
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not route this call right now. Please try again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  if (!company) {
+    console.error("Voice call not started: no company found for inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not route this call right now. Please try again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
 
 const businessName = company?.business_name || "the business";
 
-const introPrompt = `Thanks for calling ${businessName}. I'm going to grab your info quick.`;
-
   response.say(
-  { voice: "Polly.Matthew" },
-  introPrompt
-);
+    { voice: "Polly.Matthew" },
+    `Thanks for calling ${businessName}. I'm going to grab your info quick.`
+  );
 
   response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
   res.type("text/xml").send(response.toString());
@@ -274,17 +263,17 @@ app.post("/voice/location", (req, res) => {
   sayAndGather(
     response,
     "Where are you located?",
-    `/voice/priority?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(jobType)}`
+    `/voice/urgency?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(jobType)}`
   );
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/priority", (req, res) => {
+app.post("/voice/urgency", (req, res) => {
   const response = new VoiceResponse();
   const location = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
-    "how urgent is this — emergency, soon, or whenever available?",
+    "is this an Emergency?",
     `/voice/preferred-time?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(location)}`
   );
   res.type("text/xml").send(response.toString());
@@ -292,12 +281,11 @@ app.post("/voice/priority", (req, res) => {
 
 app.post("/voice/preferred-time", (req, res) => {
   const response = new VoiceResponse();
-  const priority = req.body.SpeechResult || "Not captured";
-  const location = req.query.location || "";
+  const urgency = req.body.SpeechResult || "Not captured";
   sayAndGather(
     response,
     "When are you free for a call back?",
-    `/voice/notes?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&priority=${encodeURIComponent(priority)}`
+    `/voice/notes?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(urgency)}`
   );
   res.type("text/xml").send(response.toString());
 });
@@ -305,19 +293,43 @@ app.post("/voice/preferred-time", (req, res) => {
 app.post("/voice/notes", (req, res) => {
   const response = new VoiceResponse();
   const preferredTime = req.body.SpeechResult || "Not captured";
-  const location = req.query.location || "";
-  const priority = req.query.priority || "";
   sayAndGather(
     response,
     "Any other details you need to say now?",
-    `/voice/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&priority=${encodeURIComponent(req.query.priority || "")}&preferredTime=${encodeURIComponent(preferredTime)}`
+    `/voice/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(req.query.urgency || "")}&preferredTime=${encodeURIComponent(preferredTime)}`
   );
   res.type("text/xml").send(response.toString());
 });
 
 app.post("/voice/finish", async (req, res) => {
   const response = new VoiceResponse();
+  const to = req.body.To || "";
   const notes = req.body.SpeechResult || "No extra notes";
+
+  if (!to) {
+    console.error("Voice lead not created: missing inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your request right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  let company;
+
+  try {
+    company = await findCompanyByTwilioNumber(to, "id");
+  } catch (error) {
+    console.error("Voice lead not created: company lookup failed for inbound Twilio number.", error.message);
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your request right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  if (!company) {
+    console.error("Voice lead not created: no company found for inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your request right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
 
   const lead = {
     id: uuidv4(),
@@ -329,23 +341,20 @@ app.post("/voice/finish", async (req, res) => {
     name: req.query.name || "Not captured",
     jobType: req.query.jobType || "Not captured",
     location: req.query.location || "Not captured",
-    priority: req.query.priority || "Not captured",
+    urgency: req.query.urgency || "Not captured",
     preferredTime: req.query.preferredTime || "Not captured",
     notes,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    companyId: company.id
   };
 
-  const aiAnalysis = await analyzeLeadWithAI(lead);
+  lead.score = scoreLead(lead);
+  lead.qualification = qualifyLead(lead.score);
+  lead.recommendedAction =
+    lead.score >= 70
+      ? "Call customer now or approve appointment request"
+      : "Call customer back and confirm details";
 
-lead.score = aiAnalysis.score;
-lead.qualification = aiAnalysis.qualification;
-lead.recommendedAction = aiAnalysis.recommendedAction;
-lead.notes = lead.notes
-  ? `${lead.notes}\n\nAI Summary: ${aiAnalysis.summary}`
-  : aiAnalysis.summary;
-  
-  lead.companyId = process.env.DEFAULT_COMPANY_ID;
-  
   await saveLead(lead);
 
   try {
@@ -371,7 +380,31 @@ lead.notes = lead.notes
 app.post("/sms", async (req, res) => {
   const response = new MessagingResponse();
   const from = req.body.From || "";
+  const to = req.body.To || "";
   const body = req.body.Body || "";
+
+  if (!to) {
+    console.error("SMS lead not created: missing inbound Twilio destination number.");
+    return res.type("text/xml").send(response.toString());
+  }
+
+  const { data: companies, error: companyError } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("twilio_number", to)
+    .limit(1);
+
+  if (companyError) {
+    console.error("SMS lead not created: company lookup failed for inbound Twilio number.", companyError.message);
+    return res.type("text/xml").send(response.toString());
+  }
+
+  const company = companies && companies[0];
+
+  if (!company) {
+    console.error("SMS lead not created: no company found for inbound Twilio destination number.");
+    return res.type("text/xml").send(response.toString());
+  }
 
   const lead = {
     id: uuidv4(),
@@ -382,20 +415,16 @@ app.post("/sms", async (req, res) => {
     name: "SMS Lead",
     jobType: body,
     location: "Not captured",
-    priority: body,
+    urgency: body,
     preferredTime: "Not captured",
     notes: body,
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    companyId: company.id
   };
 
-  const aiAnalysis = await analyzeLeadWithAI(lead);
-
-lead.score = aiAnalysis.score;
-lead.qualification = aiAnalysis.qualification;
-lead.recommendedAction = aiAnalysis.recommendedAction;
-lead.notes = lead.notes
-  ? `${lead.notes}\n\nAI Summary: ${aiAnalysis.summary}`
-  : aiAnalysis.summary;
+  lead.score = scoreLead(lead);
+  lead.qualification = qualifyLead(lead.score);
+  lead.recommendedAction = "Text or call customer back";
 
   await saveLead(lead);
 
@@ -428,7 +457,7 @@ app.get("/api/leads", async (req, res) => {
     name: lead.name,
     jobType: lead.job_type,
     location: lead.location,
-    priority: lead.priority,
+    urgency: lead.urgency,
     preferredTime: lead.preferred_time,
     notes: lead.notes,
     score: lead.score,
