@@ -281,7 +281,7 @@ app.post("/voice/urgency", (req, res) => {
 
 app.post("/voice/preferred-time", (req, res) => {
   const response = new VoiceResponse();
-  const urgency = req.body.SpeechResult || "Not captured";
+  const urgency = req.body.SpeechResult || req.query.urgency || "Not captured";
   sayAndGather(
     response,
     "When are you free for a call back?",
@@ -293,10 +293,11 @@ app.post("/voice/preferred-time", (req, res) => {
 app.post("/voice/notes", (req, res) => {
   const response = new VoiceResponse();
   const preferredTime = req.body.SpeechResult || "Not captured";
+  const urgency = req.query.urgency || "Not captured";
   sayAndGather(
     response,
     "Any other details you need to say now?",
-    `/voice/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(req.query.urgency || "")}&preferredTime=${encodeURIComponent(preferredTime)}`
+    `/voice/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&jobType=${encodeURIComponent(req.query.jobType || "")}&location=${encodeURIComponent(req.query.location || "")}&urgency=${encodeURIComponent(urgency)}&preferredTime=${encodeURIComponent(preferredTime)}`
   );
   res.type("text/xml").send(response.toString());
 });
@@ -305,6 +306,7 @@ app.post("/voice/finish", async (req, res) => {
   const response = new VoiceResponse();
   const to = req.body.To || "";
   const notes = req.body.SpeechResult || "No extra notes";
+  const urgency = req.query.urgency || "Not captured";
 
   if (!to) {
     console.error("Voice lead not created: missing inbound Twilio destination number.");
@@ -341,7 +343,8 @@ app.post("/voice/finish", async (req, res) => {
     name: req.query.name || "Not captured",
     jobType: req.query.jobType || "Not captured",
     location: req.query.location || "Not captured",
-    urgency: req.query.urgency || "Not captured",
+    urgency,
+    priority: urgency,
     preferredTime: req.query.preferredTime || "Not captured",
     notes,
     createdAt: new Date().toISOString(),
@@ -469,6 +472,7 @@ app.get("/api/leads", async (req, res) => {
     name: lead.name,
     jobType: lead.job_type,
     location: lead.location,
+    priority: lead.priority,
     urgency: lead.priority,
     preferredTime: lead.preferred_time,
     notes: lead.notes,
