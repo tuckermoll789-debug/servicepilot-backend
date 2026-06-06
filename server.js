@@ -13,6 +13,7 @@ const app = express();
 const VoiceResponse = twilio.twiml.VoiceResponse;
 const MessagingResponse = twilio.twiml.MessagingResponse;
 
+app.set("etag", false);
 app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
 
@@ -34,6 +35,14 @@ function readLeads() {
 
 function writeLeads(leads) {
   fs.writeFileSync(LEADS_FILE, JSON.stringify(leads, null, 2));
+}
+
+function preventCache(res) {
+  res.set({
+    "Cache-Control": "no-store, no-cache, must-revalidate, private",
+    Pragma: "no-cache",
+    Expires: "0"
+  });
 }
 
 async function findCompanyByTwilioNumber(twilioNumber, columns) {
@@ -231,14 +240,17 @@ function sayAndGather(response, prompt, actionUrl) {
 }
 
 app.get("/", (req, res) => {
+  preventCache(res);
   res.sendFile(DASHBOARD_FILE);
 });
 
 app.get("/dashboard.html", (req, res) => {
+  preventCache(res);
   res.sendFile(DASHBOARD_FILE);
 });
 
 app.get("/api/auth-config", (req, res) => {
+  preventCache(res);
   res.json({
     supabaseUrl: process.env.SUPABASE_URL,
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
@@ -510,6 +522,7 @@ app.post("/sms", async (req, res) => {
 });
 
 app.get("/api/leads", requireCompanyAuth, async (req, res) => {
+  preventCache(res);
   const { data, error } = await supabase
     .from("leads")
     .select("*")
@@ -543,6 +556,7 @@ app.get("/api/leads", requireCompanyAuth, async (req, res) => {
 });
 
 app.patch("/api/leads/:id", requireCompanyAuth, async (req, res) => {
+  preventCache(res);
   const { id } = req.params;
   const { status } = req.body;
 
