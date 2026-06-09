@@ -101,6 +101,51 @@ async function requireCompanyAuth(req, res, next) {
   }
 }
 
+async function requirePlatformAdmin(req, res, next) {
+  preventCache(res);
+  const authHeader = req.get("Authorization") || "";
+  const authParts = authHeader.split(" ");
+  const [scheme, accessToken] = authParts;
+
+  if (authParts.length !== 2 || scheme !== "Bearer" || !accessToken) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+
+  try {
+    const { data: authData, error: authError } = await supabase.auth.getUser(accessToken);
+
+    if (authError || !authData?.user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { data: platformAdmins, error: platformAdminError } = await supabase
+      .from("platform_admins")
+      .select("role")
+      .eq("auth_user_id", authData.user.id)
+      .eq("active", true)
+      .in("role", ["platform_owner", "platform_admin"])
+      .limit(1);
+
+    if (platformAdminError) {
+      console.error("Platform admin lookup failed:", platformAdminError.message);
+      return res.status(500).json({ error: "Authentication failed" });
+    }
+
+    const platformAdmin = platformAdmins && platformAdmins[0];
+
+    if (!platformAdmin) {
+      return res.status(403).json({ error: "Forbidden" });
+    }
+
+    req.authUserId = authData.user.id;
+    req.platformAdminRole = platformAdmin.role;
+    next();
+  } catch (error) {
+    console.error("Platform admin auth failed:", error.message);
+    return res.status(500).json({ error: "Authentication failed" });
+  }
+}
+
 async function saveLead(lead) {
   if (!lead.companyId) {
     throw new Error("Cannot save lead without companyId");
@@ -255,6 +300,28 @@ app.get("/api/auth-config", (req, res) => {
     supabaseUrl: process.env.SUPABASE_URL,
     supabasePublishableKey: process.env.SUPABASE_PUBLISHABLE_KEY,
     appOrigin: process.env.APP_ORIGIN
+  });
+});
+
+app.get("/api/admin/bootstrap", requirePlatformAdmin, async (req, res) => {
+  preventCache(res);
+
+  const { data: companies, error } = await supabase
+    .from("companies")
+    .select("id, business_name, notification_email, twilio_number, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("Admin bootstrap company query failed:", error.message);
+    return res.status(500).json({ error: "Could not load admin data" });
+  }
+
+  res.json({
+    admin: {
+      authUserId: req.authUserId,
+      role: req.platformAdminRole
+    },
+    companies
   });
 });
 
