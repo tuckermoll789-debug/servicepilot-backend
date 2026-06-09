@@ -229,6 +229,31 @@ function validateHttpsOrigin(origin) {
   }
 }
 
+function requireValidTwilioSignature(req, res, next) {
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const validatedAppOrigin = validateHttpsOrigin(process.env.APP_ORIGIN);
+
+  if (!authToken || !validatedAppOrigin) {
+    console.error("Twilio webhook validation is unavailable.");
+    return res.status(500).type("text/plain").send("Webhook validation unavailable");
+  }
+
+  try {
+    const signature = req.get("X-Twilio-Signature") || "";
+    const webhookUrl = `${validatedAppOrigin}${req.originalUrl}`;
+    const isValid = twilio.validateRequest(authToken, signature, webhookUrl, req.body);
+
+    if (!isValid) {
+      return res.status(403).type("text/plain").send("Forbidden");
+    }
+
+    next();
+  } catch (error) {
+    console.error("Twilio webhook validation failed unexpectedly.");
+    return res.status(403).type("text/plain").send("Forbidden");
+  }
+}
+
 async function findAuthUserByEmail(email) {
   const perPage = 1000;
   const maxPages = 10;
@@ -633,7 +658,7 @@ app.post("/api/admin/onboard-company", requirePlatformAdmin, async (req, res) =>
  * Twilio Voice webhook:
  * POST https://your-domain.com/voice/start
  */
-app.post("/voice/start", async (req, res) => {
+app.post("/voice/start", requireValidTwilioSignature, async (req, res) => {
   const response = new VoiceResponse();
   const callSid = req.body.CallSid || "";
   const callerPhone = req.body.From || "";
@@ -675,7 +700,7 @@ const businessName = company?.business_name || "the business";
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/name", (req, res) => {
+app.post("/voice/name", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   sayAndGather(
     response,
@@ -685,7 +710,7 @@ app.post("/voice/name", (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/job-type", (req, res) => {
+app.post("/voice/job-type", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const name = req.body.SpeechResult || "Not captured";
   sayAndGather(
@@ -696,7 +721,7 @@ app.post("/voice/job-type", (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/location", (req, res) => {
+app.post("/voice/location", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const jobType = req.body.SpeechResult || "Not captured";
   sayAndGather(
@@ -707,7 +732,7 @@ app.post("/voice/location", (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/urgency", (req, res) => {
+app.post("/voice/urgency", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const location = req.body.SpeechResult || "Not captured";
   sayAndGather(
@@ -718,7 +743,7 @@ app.post("/voice/urgency", (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/preferred-time", (req, res) => {
+app.post("/voice/preferred-time", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const urgency = req.body.SpeechResult || req.query.urgency || "Not captured";
   sayAndGather(
@@ -729,7 +754,7 @@ app.post("/voice/preferred-time", (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/notes", (req, res) => {
+app.post("/voice/notes", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const preferredTime = req.body.SpeechResult || "Not captured";
   const urgency = req.query.urgency || "Not captured";
@@ -741,7 +766,7 @@ app.post("/voice/notes", (req, res) => {
   res.type("text/xml").send(response.toString());
 });
 
-app.post("/voice/finish", async (req, res) => {
+app.post("/voice/finish", requireValidTwilioSignature, async (req, res) => {
   const response = new VoiceResponse();
   const to = req.body.To || "";
   const notes = req.body.SpeechResult || "No extra notes";
@@ -826,7 +851,7 @@ app.post("/voice/finish", async (req, res) => {
  * Twilio SMS webhook:
  * POST https://your-domain.com/sms
  */
-app.post("/sms", async (req, res) => {
+app.post("/sms", requireValidTwilioSignature, async (req, res) => {
   const response = new MessagingResponse();
   const from = req.body.From || "";
   const to = req.body.To || "";
