@@ -146,6 +146,133 @@ async function requirePlatformAdmin(req, res, next) {
   }
 }
 
+function safeOnboardingError(res, status, error, code, extra = {}) {
+  return res.status(status).json({ error, code, ...extra });
+}
+
+function normalizeOnboardingBody(body) {
+  return {
+    businessName: String(body?.businessName || "").trim(),
+    ownerEmail: String(body?.ownerEmail || "").trim().toLowerCase(),
+    notificationEmail: String(body?.notificationEmail || "").trim().toLowerCase(),
+    twilioNumber: String(body?.twilioNumber || "").trim(),
+    aiPrompt: body?.aiPrompt === undefined || body?.aiPrompt === null
+      ? null
+      : String(body.aiPrompt).trim() || null
+  };
+}
+
+function validateOnboardingBody(body) {
+  const allowedFields = new Set([
+    "businessName",
+    "ownerEmail",
+    "notificationEmail",
+    "twilioNumber",
+    "aiPrompt"
+  ]);
+  const forbiddenFields = new Set([
+    "company_id",
+    "companyId",
+    "auth_user_id",
+    "authUserId",
+    "platformAdminRole",
+    "platformRole",
+    "role",
+    "customerRole",
+    "active",
+    "redirectTo"
+  ]);
+
+  for (const field of Object.keys(body || {})) {
+    if (forbiddenFields.has(field) || !allowedFields.has(field)) {
+      return "UNEXPECTED_ONBOARDING_FIELD";
+    }
+  }
+
+  const details = normalizeOnboardingBody(body);
+  const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const e164Pattern = /^\+[1-9][0-9]{7,14}$/;
+
+  if (!details.businessName || details.businessName.length > 120) {
+    return "INVALID_BUSINESS_NAME";
+  }
+
+  if (!emailPattern.test(details.ownerEmail)) {
+    return "INVALID_OWNER_EMAIL";
+  }
+
+  if (!emailPattern.test(details.notificationEmail)) {
+    return "INVALID_NOTIFICATION_EMAIL";
+  }
+
+  if (!e164Pattern.test(details.twilioNumber)) {
+    return "INVALID_TWILIO_NUMBER";
+  }
+
+  if (details.aiPrompt && details.aiPrompt.length > 4000) {
+    return "INVALID_AI_PROMPT";
+  }
+
+  return null;
+}
+
+function validateHttpsOrigin(origin) {
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "https:" || url.pathname !== "/" || url.search || url.hash) {
+      return null;
+    }
+    return url.origin;
+  } catch (error) {
+    return null;
+  }
+}
+
+async function findAuthUserByEmail(email) {
+  const perPage = 1000;
+  const maxPages = 10;
+
+  for (let page = 1; page <= maxPages; page += 1) {
+    const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+
+    if (error) throw error;
+
+    const users = data?.users || [];
+    const matchingUser = users.find(user =>
+      String(user?.email || "").toLowerCase() === email
+    );
+
+    if (matchingUser) return matchingUser;
+    if (users.length < perPage) return null;
+  }
+
+  throw new Error("Auth user lookup exceeded maximum pages");
+}
+
+function isConflictError(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "").toLowerCase();
+  return code === "23505" ||
+    code === "409" ||
+    message.includes("duplicate") ||
+    message.includes("unique") ||
+    message.includes("conflict");
+}
+
+function companyResponseFromRecord(company) {
+  return {
+    id: company.id,
+    businessName: company.business_name,
+    notificationEmail: company.notification_email,
+    twilioNumber: company.twilio_number
+  };
+}
+
+function firstCompanyRecord(data) {
+  if (Array.isArray(data)) return data[0];
+  return data;
+}
+
 async function saveLead(lead) {
   if (!lead.companyId) {
     throw new Error("Cannot save lead without companyId");
@@ -322,6 +449,172 @@ app.get("/api/admin/bootstrap", requirePlatformAdmin, async (req, res) => {
       role: req.platformAdminRole
     },
     companies
+  });
+});
+
+app.post("/api/admin/onboard-company", requirePlatformAdmin, async (req, res) => {
+  const validationCode = validateOnboardingBody(req.body);
+
+  if (validationCode) {
+    return safeOnboardingError(res, 400, "Invalid onboarding details", validationCode);
+  }
+
+  const {
+    businessName,
+    ownerEmail,
+    notificationEmail,
+    twilioNumber,
+    aiPrompt
+  } = normalizeOnboardingBody(req.body);
+
+  const appOrigin = validateHttpsOrigin(process.env.APP_ORIGIN);
+
+  if (!appOrigin) {
+    console.error("Onboarding failed at app origin validation.");
+    return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+      recoveryRequired: true
+    });
+  }
+
+  const { data: existingCompanies, error: twilioLookupError } = await supabase
+    .from("companies")
+    .select("id")
+    .eq("twilio_number", twilioNumber)
+    .limit(1);
+
+  if (twilioLookupError) {
+    console.error("Onboarding failed at Twilio number lookup:", twilioLookupError.message);
+    return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+      recoveryRequired: true
+    });
+  }
+
+  if (existingCompanies?.[0]) {
+    return safeOnboardingError(res, 409, "Twilio number is already assigned", "TWILIO_NUMBER_IN_USE");
+  }
+
+  let authUser;
+  let createdAuthUser = false;
+
+  try {
+    authUser = await findAuthUserByEmail(ownerEmail);
+  } catch (error) {
+    console.error("Onboarding failed at Auth user lookup:", error.message);
+    return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+      recoveryRequired: true
+    });
+  }
+
+  if (authUser) {
+    const { data: companyUsers, error: companyUserError } = await supabase
+      .from("company_users")
+      .select("company_id")
+      .eq("auth_user_id", authUser.id)
+      .limit(1);
+
+    if (companyUserError) {
+      console.error("Onboarding failed at company user lookup:", companyUserError.message);
+      return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+        recoveryRequired: true
+      });
+    }
+
+    if (companyUsers?.[0]) {
+      return safeOnboardingError(res, 409, "Customer email is already assigned", "OWNER_EMAIL_ALREADY_ASSIGNED");
+    }
+
+    const { data: platformAdmins, error: platformAdminError } = await supabase
+      .from("platform_admins")
+      .select("auth_user_id")
+      .eq("auth_user_id", authUser.id)
+      .eq("active", true)
+      .in("role", ["platform_owner", "platform_admin"])
+      .limit(1);
+
+    if (platformAdminError) {
+      console.error("Onboarding failed at platform admin reservation check:", platformAdminError.message);
+      return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+        recoveryRequired: true
+      });
+    }
+
+    if (platformAdmins?.[0]) {
+      return safeOnboardingError(res, 409, "This email cannot be used for a customer account", "OWNER_EMAIL_RESERVED");
+    }
+  } else {
+    const { data: createdUserData, error: createUserError } = await supabase.auth.admin.createUser({
+      email: ownerEmail,
+      email_confirm: true
+    });
+
+    if (createUserError || !createdUserData?.user?.id) {
+      console.error("Onboarding failed at Auth user creation:", createUserError?.message || "No user returned");
+      return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+        recoveryRequired: true
+      });
+    }
+
+    authUser = createdUserData.user;
+    createdAuthUser = true;
+  }
+
+  const { data: rpcData, error: rpcError } = await supabase.rpc("onboard_company_record", {
+    p_auth_user_id: authUser.id,
+    p_business_name: businessName,
+    p_notification_email: notificationEmail,
+    p_twilio_number: twilioNumber,
+    p_ai_prompt: aiPrompt
+  });
+
+  if (rpcError) {
+    console.error("Onboarding failed at company RPC:", rpcError.message);
+
+    if (isConflictError(rpcError)) {
+      return safeOnboardingError(res, 409, "Customer conflicts with an existing account", "ONBOARDING_CONFLICT");
+    }
+
+    return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+      recoveryRequired: true
+    });
+  }
+
+  let company = firstCompanyRecord(rpcData);
+
+  if (!company?.id || !company.business_name || !company.notification_email || !company.twilio_number) {
+    const { data: companyLookupData, error: companyLookupError } = await supabase
+      .from("companies")
+      .select("id, business_name, notification_email, twilio_number")
+      .eq("twilio_number", twilioNumber)
+      .maybeSingle();
+
+    if (companyLookupError || !companyLookupData?.id) {
+      console.error("Onboarding failed at created company lookup:", companyLookupError?.message || "No company returned");
+      return safeOnboardingError(res, 500, "Could not complete customer onboarding", "ONBOARDING_FAILED", {
+        recoveryRequired: true
+      });
+    }
+
+    company = companyLookupData;
+  }
+
+  const { error: passwordEmailError } = await supabase.auth.resetPasswordForEmail(ownerEmail, {
+    redirectTo: `${appOrigin}/dashboard.html?mode=reset`
+  });
+
+  if (passwordEmailError) {
+    console.error("Onboarding password setup email failed:", passwordEmailError.message);
+    return res.status(201).json({
+      company: companyResponseFromRecord(company),
+      ownerEmail,
+      passwordSetupEmailSent: false,
+      warning: "Customer was created, but the password setup email was not sent."
+    });
+  }
+
+  res.status(201).json({
+    company: companyResponseFromRecord(company),
+    ownerEmail,
+    passwordSetupEmailSent: true
   });
 });
 
