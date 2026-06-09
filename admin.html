@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ServicePilot Admin</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Inter,Arial,sans-serif;background:#f8fafc;color:#0f172a}
+[hidden]{display:none!important}
+a{text-decoration:none;color:inherit}button,input,textarea{font-family:inherit}
+.nav{background:white;border-bottom:1px solid #e2e8f0;position:sticky;top:0;z-index:10}
+.nav-inner{max-width:1180px;margin:auto;padding:16px 24px;display:flex;justify-content:space-between;align-items:center;gap:16px}
+.logo{display:flex;align-items:center;gap:10px;font-size:23px;font-weight:950;letter-spacing:-.05em}
+.logo-mark{width:44px;height:44px;border-radius:15px;background:linear-gradient(135deg,#2563eb,#14b8a6);display:grid;place-items:center;color:white}
+.nav-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.btn{border:0;border-radius:999px;background:#2563eb;color:white;padding:12px 16px;font-weight:900;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}
+.btn.gray{background:#e2e8f0;color:#0f172a}.btn.dark{background:#0f172a}.btn:disabled{opacity:.62;cursor:not-allowed}
+.wrap{max-width:1180px;margin:auto;padding:32px 24px 60px}
+.hero{display:flex;justify-content:space-between;gap:20px;align-items:flex-start;margin-bottom:22px}
+h1{font-size:44px;letter-spacing:-.06em;line-height:1;margin:0 0 8px}
+h2{font-size:22px;letter-spacing:-.035em;margin:0 0 14px}
+p{color:#64748b;line-height:1.6;margin:0}
+.role{display:inline-flex;margin-top:10px;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:999px;padding:8px 11px;font-weight:950;font-size:13px}
+.grid{display:grid;grid-template-columns:minmax(0,440px) 1fr;gap:18px;align-items:start}
+.card{background:white;border:1px solid #e2e8f0;border-radius:26px;padding:22px;box-shadow:0 18px 50px rgba(15,23,42,.055)}
+.form{display:grid;gap:12px}
+label{display:grid;gap:7px;color:#334155;font-size:13px;font-weight:950}
+input,textarea{width:100%;border:1px solid #cbd5e1;background:white;border-radius:18px;padding:13px 14px;font-size:15px;outline:0}
+textarea{min-height:150px;resize:vertical;line-height:1.45}
+.status{min-height:24px;color:#64748b;font-weight:850;font-size:14px}
+.status.good{color:#166534}.status.warn{color:#92400e}.status.bad{color:#991b1b}
+.companies{display:grid;gap:12px}
+.company{border:1px solid #e2e8f0;background:#f8fafc;border-radius:18px;padding:14px}
+.company strong{display:block;font-size:17px;margin-bottom:8px}
+.company dl{display:grid;grid-template-columns:150px 1fr;gap:6px 10px;margin:0}
+.company dt{color:#64748b;font-size:12px;font-weight:950;text-transform:uppercase;letter-spacing:.04em}
+.company dd{margin:0;color:#334155;font-weight:800;word-break:break-word}
+.state-screen{min-height:100vh;display:grid;place-items:center;padding:24px}
+.state-panel{background:white;border:1px solid #e2e8f0;border-radius:26px;padding:30px;box-shadow:0 18px 50px rgba(15,23,42,.055);width:min(480px,100%)}
+.state-panel h1{font-size:32px}
+@media(max-width:900px){.hero,.grid{display:block}.card+.card{margin-top:18px}.nav-inner{align-items:flex-start}.nav-actions{justify-content:flex-end}h1{font-size:36px}.company dl{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<section class="state-screen" id="loadingScreen">
+  <div class="state-panel">
+    <div class="logo"><div class="logo-mark">SP</div>ServicePilot</div>
+    <h1>Loading administration</h1>
+    <p>Checking your ServicePilot session.</p>
+  </div>
+</section>
+
+<section class="state-screen" id="signInScreen" hidden>
+  <div class="state-panel">
+    <div class="logo"><div class="logo-mark">SP</div>ServicePilot</div>
+    <h1>Sign in required</h1>
+    <p>Sign in to ServicePilot before opening the admin page.</p>
+    <p style="margin-top:18px;"><a class="btn" href="/dashboard.html">Go to Dashboard</a></p>
+  </div>
+</section>
+
+<section class="state-screen" id="forbiddenScreen" hidden>
+  <div class="state-panel">
+    <div class="logo"><div class="logo-mark">SP</div>ServicePilot</div>
+    <h1>Permission denied</h1>
+    <p>You do not have permission to access ServicePilot administration.</p>
+    <p style="margin-top:18px;"><a class="btn gray" href="/dashboard.html">Lead Dashboard</a></p>
+  </div>
+</section>
+
+<section class="state-screen" id="errorScreen" hidden>
+  <div class="state-panel">
+    <div class="logo"><div class="logo-mark">SP</div>ServicePilot</div>
+    <h1>Administration unavailable</h1>
+    <p>Could not load administration right now.</p>
+    <p style="margin-top:18px;"><button class="btn" type="button" onclick="initAdmin()">Retry</button></p>
+  </div>
+</section>
+
+<nav class="nav" id="adminNav" hidden>
+  <div class="nav-inner">
+    <div class="logo"><div class="logo-mark">SP</div>ServicePilot</div>
+    <div class="nav-actions">
+      <a class="btn gray" href="/dashboard.html">Lead Dashboard</a>
+      <button class="btn dark" type="button" onclick="logout()">Logout</button>
+    </div>
+  </div>
+</nav>
+
+<main class="wrap" id="adminMain" hidden>
+  <section class="hero">
+    <div>
+      <h1>Customer Onboarding</h1>
+      <p>Create a customer account and send the owner a password setup email.</p>
+      <span class="role" id="adminRole"></span>
+    </div>
+  </section>
+
+  <section class="grid">
+    <div class="card">
+      <h2>New Customer</h2>
+      <form class="form" id="onboardingForm">
+        <label>Business name
+          <input id="businessNameInput" name="businessName" maxlength="120" required autocomplete="organization" />
+        </label>
+        <label>Owner email
+          <input id="ownerEmailInput" name="ownerEmail" type="email" required autocomplete="email" />
+        </label>
+        <label>Notification email
+          <input id="notificationEmailInput" name="notificationEmail" type="email" required autocomplete="email" />
+        </label>
+        <label>Twilio number
+          <input id="twilioNumberInput" name="twilioNumber" required inputmode="tel" pattern="^\+[1-9][0-9]{7,14}$" placeholder="+15551234567" />
+        </label>
+        <label>Optional AI prompt
+          <textarea id="aiPromptInput" name="aiPrompt" maxlength="4000"></textarea>
+        </label>
+        <button class="btn" id="submitButton" type="submit">Create Customer</button>
+        <div class="status" id="formStatus" aria-live="polite"></div>
+      </form>
+    </div>
+
+    <div class="card">
+      <h2>Companies</h2>
+      <div class="companies" id="companiesList"></div>
+    </div>
+  </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script>
+let supabaseClient=null;let currentAccessToken=null;let bootstrapData=null;let submitting=false;
+function hideAll(){loadingScreen.hidden=true;signInScreen.hidden=true;forbiddenScreen.hidden=true;errorScreen.hidden=true;adminNav.hidden=true;adminMain.hidden=true}
+function showLoading(){hideAll();loadingScreen.hidden=false}
+function showSignInRequired(){hideAll();clearAdminData();signInScreen.hidden=false}
+function showForbidden(){hideAll();clearAdminData();forbiddenScreen.hidden=false}
+function showError(){hideAll();clearAdminData();errorScreen.hidden=false}
+function showAdmin(){hideAll();adminNav.hidden=false;adminMain.hidden=false}
+function setStatus(message,type=""){formStatus.textContent=message;formStatus.className=type?`status ${type}`:"status"}
+function clearAdminData(){bootstrapData=null;currentAccessToken=null;if(companiesList)companiesList.replaceChildren();if(adminRole)adminRole.textContent=""}
+function formatDate(value){if(!value)return"Not captured";const date=new Date(value);return Number.isNaN(date.getTime())?"Not captured":date.toLocaleDateString()}
+async function refreshSession(){if(!supabaseClient)return null;const {data}=await supabaseClient.auth.getSession();return data.session||null}
+async function adminHeaders(){const session=await refreshSession();if(!session?.access_token)return null;currentAccessToken=session.access_token;return{Authorization:`Bearer ${session.access_token}`}}
+function addCompanyRow(company){const article=document.createElement("article");article.className="company";const name=document.createElement("strong");name.textContent=company?.business_name||"Unnamed company";const details=document.createElement("dl");const rows=[["Notification",company?.notification_email||"Not captured"],["Twilio",company?.twilio_number||"Not captured"],["Created",formatDate(company?.created_at)]];rows.forEach(([label,value])=>{const dt=document.createElement("dt");dt.textContent=label;const dd=document.createElement("dd");dd.textContent=value;details.append(dt,dd)});article.append(name,details);companiesList.append(article)}
+function renderCompanies(companies){companiesList.replaceChildren();if(!companies||!companies.length){const empty=document.createElement("p");empty.textContent="No companies yet.";companiesList.append(empty);return}companies.forEach(addCompanyRow)}
+function renderAdmin(data){bootstrapData=data;adminRole.textContent=`Signed in as ${data?.admin?.role||"administrator"}`;renderCompanies(data?.companies||[]);showAdmin()}
+async function loadBootstrap(){const headers=await adminHeaders();if(!headers){showSignInRequired();return false}const response=await fetch("/api/admin/bootstrap",{headers,cache:"no-store"});if(response.status===401){showSignInRequired();return false}if(response.status===403){showForbidden();return false}if(!response.ok){showError();return false}const data=await response.json();renderAdmin(data);return true}
+async function initAdmin(){showLoading();try{const configResponse=await fetch("/api/auth-config",{cache:"no-store"});if(!configResponse.ok){showError();return}const config=await configResponse.json();supabaseClient=window.supabase.createClient(config.supabaseUrl,config.supabasePublishableKey);await loadBootstrap()}catch(error){showError()}}
+async function submitOnboarding(event){event.preventDefault();if(submitting)return;setStatus("");if(!onboardingForm.reportValidity()){setStatus("Check the customer details and try again.","bad");return}const headers=await adminHeaders();if(!headers){showSignInRequired();return}const payload={businessName:businessNameInput.value.trim(),ownerEmail:ownerEmailInput.value.trim(),notificationEmail:notificationEmailInput.value.trim(),twilioNumber:twilioNumberInput.value.trim(),aiPrompt:aiPromptInput.value.trim()};submitting=true;submitButton.disabled=true;try{const response=await fetch("/api/admin/onboard-company",{method:"POST",headers:{...headers,"Content-Type":"application/json"},cache:"no-store",body:JSON.stringify(payload)});let result={};try{result=await response.json()}catch(error){}if(response.status===201){onboardingForm.reset();await loadBootstrap();if(result.passwordSetupEmailSent){setStatus("Customer created and password setup email sent.","good")}else{setStatus(result.warning||"Customer was created, but the password setup email was not sent.","warn")}return}if(response.status===400){setStatus("Check the customer details and try again.","bad");return}if(response.status===409){setStatus(result.error||"Customer conflicts with an existing account.","bad");return}if(response.status===401){showSignInRequired();return}if(response.status===403){showForbidden();return}setStatus("Could not complete customer onboarding.","bad")}catch(error){setStatus("Could not complete customer onboarding.","bad")}finally{submitting=false;submitButton.disabled=false}}
+async function logout(){if(supabaseClient)await supabaseClient.auth.signOut();if(onboardingForm)onboardingForm.reset();clearAdminData();showSignInRequired()}
+onboardingForm.addEventListener("submit",submitOnboarding);
+initAdmin();
+</script>
+</body>
+</html>

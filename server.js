@@ -21,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 const DATA_DIR = path.join(__dirname, "data");
 const LEADS_FILE = path.join(DATA_DIR, "leads.json");
 const DASHBOARD_FILE = path.join(__dirname, "dashboard.html");
+const ADMIN_FILE = path.join(__dirname, "admin.html");
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SECRET_KEY
@@ -419,6 +420,16 @@ app.get("/", (req, res) => {
 app.get("/dashboard.html", (req, res) => {
   preventCache(res);
   res.sendFile(DASHBOARD_FILE);
+});
+
+app.get("/admin", (req, res) => {
+  preventCache(res);
+  res.sendFile(ADMIN_FILE);
+});
+
+app.get("/admin.html", (req, res) => {
+  preventCache(res);
+  res.sendFile(ADMIN_FILE);
 });
 
 app.get("/api/auth-config", (req, res) => {
