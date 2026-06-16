@@ -492,7 +492,12 @@ function classifyCallType(digits, speechResult) {
   if (digit === "3") return "General Message";
 
   const speech = String(speechResult || "").toLowerCase();
+  const normalizedSpeech = speech.replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
   if (!speech) return null;
+
+  if (["one", "1", "number one"].includes(normalizedSpeech)) return "New Lead";
+  if (["two", "2", "number two"].includes(normalizedSpeech)) return "Existing Customer";
+  if (["three", "3", "number three"].includes(normalizedSpeech)) return "General Message";
 
   if (
     speech.includes("new service") ||
@@ -515,7 +520,9 @@ function classifyCallType(digits, speechResult) {
     speech.includes("warranty") ||
     speech.includes("billing") ||
     speech.includes("job status") ||
-    speech.includes("appointment")
+    speech.includes("current appointment") ||
+    speech.includes("appointment status") ||
+    speech.includes("reschedule appointment")
   ) {
     return "Existing Customer";
   }
@@ -525,7 +532,8 @@ function classifyCallType(digits, speechResult) {
     speech.includes("general message") ||
     speech.includes("vendor") ||
     speech.includes("employee") ||
-    speech.includes("other")
+    normalizedSpeech === "other" ||
+    /\bother\b/.test(normalizedSpeech)
   ) {
     return "General Message";
   }
@@ -965,7 +973,7 @@ app.post("/voice/existing/finish", requireValidTwilioSignature, async (req, res)
 
   response.say(
     { voice: "Polly.Matthew" },
-    "Thanks. I saved your message for the team to review and follow up."
+    "Thank you. I've sent your message to the team. I don't have access to their schedule, billing records, or individual job details, so someone from the business will need to follow up with you."
   );
   response.hangup();
   res.type("text/xml").send(response.toString());
