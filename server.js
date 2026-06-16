@@ -470,6 +470,19 @@ function sayAndGather(response, prompt, actionUrl) {
   response.redirect(actionUrl);
 }
 
+function sayAndGatherLongSpeech(response, prompt, actionUrl) {
+  const gatherNode = response.gather({
+    input: "speech",
+    action: actionUrl,
+    method: "POST",
+    speechTimeout: 2,
+    language: "en-US"
+  });
+
+  gatherNode.say({ voice: "Polly.Matthew" }, prompt);
+  response.redirect(actionUrl);
+}
+
 function gatherClassification(response, businessName, actionUrl) {
   const prompt = `Thanks for calling ${businessName}. I'm the automated assistant helping while the team is unavailable. For a new service request, press or say 1. For an existing job or appointment, press or say 2. For anything else, press or say 3.`;
   const gatherNode = response.gather({
@@ -576,12 +589,51 @@ function wantsCallback(digits, speechResult) {
 }
 
 function organizationOrGeneralMessage(organization) {
-  const value = String(organization || "").trim();
-  const normalized = value.toLowerCase();
-  if (!value || normalized === "none" || normalized === "no" || normalized === "not applicable" || normalized === "n/a") {
+  const value = String(organization || "").replace(/\s+/g, " ").trim();
+  const normalized = value
+    .toLowerCase()
+    .replace(/[’‘]/g, "'")
+    .replace(/[^\w'\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const negativeOrganizationResponses = new Set([
+    "none",
+    "no",
+    "no organization",
+    "no company",
+    "no business",
+    "i'm not calling from an organization",
+    "im not calling from an organization",
+    "i am not calling from an organization",
+    "i'm not calling from any organization",
+    "im not calling from any organization",
+    "i am not calling from any organization",
+    "i'm not with a company",
+    "im not with a company",
+    "i am not with a company",
+    "this is a personal call",
+    "just myself",
+    "not applicable",
+    "n/a",
+    "n a"
+  ]);
+
+  if (!value || negativeOrganizationResponses.has(normalized)) {
     return "General Message";
   }
   return value;
+}
+
+function generalMessageCallerName(name) {
+  const value = String(name || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^(?:my name is|this is|i am|i'm|i’m|you can call me)\s+/i, "")
+    .replace(/[.!?]+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  return value || "Not captured";
 }
 
 app.get("/", (req, res) => {
@@ -1005,7 +1057,7 @@ app.post("/voice/general/name", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   sayAndGather(
     response,
-    "Please say your name.",
+    "Please say your first and last name.",
     `/voice/general/organization?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}`
   );
   res.type("text/xml").send(response.toString());
@@ -1013,10 +1065,10 @@ app.post("/voice/general/name", requireValidTwilioSignature, (req, res) => {
 
 app.post("/voice/general/organization", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
-  const name = req.body.SpeechResult || "Not captured";
+  const name = generalMessageCallerName(req.body.SpeechResult);
   sayAndGather(
     response,
-    "What business or organization are you calling from, if any?",
+    "Please say the business or organization name, or say none.",
     `/voice/general/message?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(name)}`
   );
   res.type("text/xml").send(response.toString());
@@ -1025,7 +1077,7 @@ app.post("/voice/general/organization", requireValidTwilioSignature, (req, res) 
 app.post("/voice/general/message", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const organization = req.body.SpeechResult || "General Message";
-  sayAndGather(
+  sayAndGatherLongSpeech(
     response,
     "What message would you like to leave?",
     `/voice/general/callback-requested?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(organization)}`
