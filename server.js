@@ -546,11 +546,30 @@ function wantsCallback(digits, speechResult) {
   if (digit === "1") return true;
   if (digit === "2") return false;
 
-  const speech = String(speechResult || "").toLowerCase();
-  if (!speech) return false;
-  if (speech.includes("yes") || speech.includes("call me") || speech.includes("callback") || speech.includes("call back")) return true;
-  if (speech.includes("no") || speech.includes("not needed") || speech.includes("no callback")) return false;
-  return false;
+  const normalizedSpeech = String(speechResult || "").toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalizedSpeech) return null;
+
+  if (
+    normalizedSpeech === "no" ||
+    normalizedSpeech === "no callback" ||
+    normalizedSpeech.includes("do not call") ||
+    normalizedSpeech.includes("don t need a callback") ||
+    normalizedSpeech.includes("dont need a callback") ||
+    normalizedSpeech.includes("not needed")
+  ) {
+    return false;
+  }
+
+  if (
+    normalizedSpeech === "yes" ||
+    normalizedSpeech === "yes please" ||
+    normalizedSpeech.includes("call me") ||
+    normalizedSpeech.includes("would like a callback")
+  ) {
+    return true;
+  }
+
+  return null;
 }
 
 function organizationOrGeneralMessage(organization) {
@@ -1014,7 +1033,7 @@ app.post("/voice/general/message", requireValidTwilioSignature, (req, res) => {
 app.post("/voice/general/callback-requested", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const message = req.body.SpeechResult || "Not captured";
-  const actionUrl = `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(message)}`;
+  const actionUrl = `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(message)}&callbackAttempt=1`;
 
   sayAndGather(response, "Would you like a callback? Please say yes or no.", actionUrl);
   res.type("text/xml").send(response.toString());
@@ -1023,9 +1042,19 @@ app.post("/voice/general/callback-requested", requireValidTwilioSignature, (req,
 app.post("/voice/general/callback-answer", requireValidTwilioSignature, (req, res) => {
   const response = new VoiceResponse();
   const callbackRequested = wantsCallback(req.body.Digits, req.body.SpeechResult);
+  const callbackAttempt = Number(req.query.callbackAttempt || "1");
 
-  if (!callbackRequested) {
+  if (callbackRequested === false || (callbackRequested === null && callbackAttempt >= 2)) {
     response.redirect(`/voice/general/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(req.query.message || "")}&callbackRequested=no&preferredTime=${encodeURIComponent("Not requested")}`);
+    return res.type("text/xml").send(response.toString());
+  }
+
+  if (callbackRequested === null) {
+    sayAndGather(
+      response,
+      "Would you like a callback? Please say yes or no.",
+      `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(req.query.message || "")}&callbackAttempt=2`
+    );
     return res.type("text/xml").send(response.toString());
   }
 
