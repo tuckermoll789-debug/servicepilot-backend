@@ -596,29 +596,49 @@ function organizationOrGeneralMessage(organization) {
     .replace(/[^\w'\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+  const normalizedWithoutApostrophes = normalized
+    .replace(/'/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
   const negativeOrganizationResponses = new Set([
     "none",
     "no",
     "no organization",
     "no company",
     "no business",
-    "i'm not calling from an organization",
-    "im not calling from an organization",
+    "i dont have a business",
+    "i dont have a business organization",
+    "i dont have an organization",
+    "i dont have an organization name",
+    "i dont have a company",
     "i am not calling from an organization",
-    "i'm not calling from any organization",
-    "im not calling from any organization",
     "i am not calling from any organization",
-    "i'm not with a company",
-    "im not with a company",
     "i am not with a company",
+    "i am not with any company",
+    "i am not with any organization",
+    "im not calling from an organization",
+    "im not calling from any organization",
+    "im not with a company",
+    "im not with any company",
+    "im not with any organization",
+    "no this is a personal call",
     "this is a personal call",
+    "this is just a personal call",
     "just myself",
     "not applicable",
-    "n/a",
     "n a"
   ]);
+  const negativeOrganizationPatterns = [
+    /^i (?:do not|dont) have (?:a|an|any) (?:business(?: organization)?|organization(?: name)?|company)$/,
+    /^i (?:am|m) not with (?:a|any) (?:company|organization)$/,
+    /^(?:no )?this is (?:just )?a personal call$/
+  ];
 
-  if (!value || negativeOrganizationResponses.has(normalized)) {
+  if (
+    !value ||
+    negativeOrganizationResponses.has(normalizedWithoutApostrophes) ||
+    negativeOrganizationPatterns.some((pattern) => pattern.test(normalizedWithoutApostrophes))
+  ) {
     return "General Message";
   }
   return value;
