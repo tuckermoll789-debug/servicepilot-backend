@@ -309,6 +309,7 @@ async function saveLead(lead) {
     .insert({
       source: lead.source,
       status: lead.status,
+      call_type: lead.callType || "New Lead",
       call_sid: lead.callSid,
       caller_phone: lead.callerPhone,
       phone: lead.phone,
@@ -931,6 +932,7 @@ app.get("/api/leads", requireCompanyAuth, async (req, res) => {
     id: lead.id,
     source: lead.source,
     status: lead.status,
+    callType: lead.call_type || "New Lead",
     callSid: lead.call_sid,
     callerPhone: lead.caller_phone,
     phone: lead.phone,
