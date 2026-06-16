@@ -381,12 +381,11 @@ const { data: company, error } = await supabase
 if (error || !company?.notification_email) return;
 
   const resend = new Resend(process.env.RESEND_API_KEY);
-
-  await resend.emails.send({
-    from: "ServicePilot <onboarding@resend.dev>",
-    to: company.notification_email,
-    subject: `New ServicePilot Lead - ${lead.qualification}`,
-    text: `
+  const callType = lead.callType || "New Lead";
+  const phone = lead.phone || lead.callerPhone || "Not captured";
+  const name = lead.name || "Not captured";
+  let subject = `New ServicePilot Lead - ${lead.qualification}`;
+  let text = `
 Name: ${lead.name}
 Phone: ${lead.phone || lead.callerPhone}
 Job Type: ${lead.jobType}
@@ -399,7 +398,40 @@ ${lead.notes}
 
 Recommended Action:
 ${lead.recommendedAction}
-`
+`;
+
+  if (callType === "Existing Customer") {
+    subject = `Existing customer callback needed: ${name}`;
+    text = `
+Call type: ${callType}
+Name: ${name}
+Phone: ${phone}
+Job address: ${lead.location || "Not captured"}
+Reason: ${lead.notes || "Not captured"}
+Urgency: ${lead.urgency || "Not captured"}
+Preferred callback time: ${lead.preferredTime || "Not captured"}
+Recommended action: ${lead.recommendedAction || "Contact the existing customer and review the related job or appointment."}
+`;
+  } else if (callType === "General Message") {
+    const callbackRequested = lead.preferredTime && lead.preferredTime !== "Not requested" ? "Yes" : "No";
+    subject = `New general message: ${name}`;
+    text = `
+Call type: ${callType}
+Name: ${name}
+Phone: ${phone}
+Organization: ${lead.jobType || "General Message"}
+Message: ${lead.notes || "Not captured"}
+Callback requested: ${callbackRequested}
+Preferred callback time: ${lead.preferredTime || "Not requested"}
+Recommended action: ${lead.recommendedAction || "Review the message."}
+`;
+  }
+
+  await resend.emails.send({
+    from: "ServicePilot <onboarding@resend.dev>",
+    to: company.notification_email,
+    subject,
+    text
   });
 }
 
@@ -436,6 +468,120 @@ function sayAndGather(response, prompt, actionUrl) {
 
   gatherNode.say({ voice: "Polly.Matthew" }, prompt);
   response.redirect(actionUrl);
+}
+
+function gatherClassification(response, businessName, actionUrl) {
+  const prompt = `Thanks for calling ${businessName}. I'm the automated assistant helping while the team is unavailable. For a new service request, press or say 1. For an existing job or appointment, press or say 2. For anything else, press or say 3.`;
+  const gatherNode = response.gather({
+    input: "speech dtmf",
+    numDigits: 1,
+    action: actionUrl,
+    method: "POST",
+    speechTimeout: "auto",
+    language: "en-US"
+  });
+
+  gatherNode.say({ voice: "Polly.Matthew" }, prompt);
+  response.redirect(actionUrl);
+}
+
+function classifyCallType(digits, speechResult) {
+  const digit = String(digits || "").trim();
+  if (digit === "1") return "New Lead";
+  if (digit === "2") return "Existing Customer";
+  if (digit === "3") return "General Message";
+
+  const speech = String(speechResult || "").toLowerCase();
+  const normalizedSpeech = speech.replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!speech) return null;
+
+  if (["one", "1", "number one"].includes(normalizedSpeech)) return "New Lead";
+  if (["two", "2", "number two"].includes(normalizedSpeech)) return "Existing Customer";
+  if (["three", "3", "number three"].includes(normalizedSpeech)) return "General Message";
+
+  if (
+    speech.includes("new service") ||
+    speech.includes("new request") ||
+    speech.includes("service request") ||
+    speech.includes("new lead") ||
+    speech.includes("new customer") ||
+    speech.includes("estimate") ||
+    speech.includes("quote")
+  ) {
+    return "New Lead";
+  }
+
+  if (
+    speech.includes("existing job") ||
+    speech.includes("existing appointment") ||
+    speech.includes("current customer") ||
+    speech.includes("existing customer") ||
+    speech.includes("reschedule") ||
+    speech.includes("warranty") ||
+    speech.includes("billing") ||
+    speech.includes("job status") ||
+    speech.includes("current appointment") ||
+    speech.includes("appointment status") ||
+    speech.includes("reschedule appointment")
+  ) {
+    return "Existing Customer";
+  }
+
+  if (
+    speech.includes("something else") ||
+    speech.includes("general message") ||
+    speech.includes("vendor") ||
+    speech.includes("employee") ||
+    normalizedSpeech === "other" ||
+    /\bother\b/.test(normalizedSpeech)
+  ) {
+    return "General Message";
+  }
+
+  return null;
+}
+
+function wantsCallback(digits, speechResult) {
+  const digit = String(digits || "").trim();
+  if (digit === "1") return true;
+  if (digit === "2") return false;
+
+  const normalizedSpeech = String(speechResult || "").toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
+  if (!normalizedSpeech) return null;
+
+  if (
+    normalizedSpeech === "no" ||
+    normalizedSpeech === "no callback" ||
+    normalizedSpeech.includes("do not call") ||
+    normalizedSpeech.includes("don t call") ||
+    normalizedSpeech.includes("dont call") ||
+    normalizedSpeech.includes("never call") ||
+    normalizedSpeech.includes("don t need a callback") ||
+    normalizedSpeech.includes("dont need a callback") ||
+    normalizedSpeech.includes("not needed")
+  ) {
+    return false;
+  }
+
+  if (
+    normalizedSpeech === "yes" ||
+    normalizedSpeech === "yes please" ||
+    normalizedSpeech.includes("call me") ||
+    normalizedSpeech.includes("would like a callback")
+  ) {
+    return true;
+  }
+
+  return null;
+}
+
+function organizationOrGeneralMessage(organization) {
+  const value = String(organization || "").trim();
+  const normalized = value.toLowerCase();
+  if (!value || normalized === "none" || normalized === "no" || normalized === "not applicable" || normalized === "n/a") {
+    return "General Message";
+  }
+  return value;
 }
 
 app.get("/", (req, res) => {
@@ -692,12 +838,311 @@ app.post("/voice/start", requireValidTwilioSignature, async (req, res) => {
 
 const businessName = company?.business_name || "the business";
 
+  gatherClassification(
+    response,
+    businessName,
+    `/voice/classify?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}&businessName=${encodeURIComponent(businessName)}&attempt=1`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/classify", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const callSid = req.query.callSid || "";
+  const callerPhone = req.query.callerPhone || "";
+  const businessName = req.query.businessName || "the business";
+  const attempt = Number(req.query.attempt || "1");
+  const callType = classifyCallType(req.body.Digits, req.body.SpeechResult);
+
+  if (callType === "New Lead") {
+    response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
+  } else if (callType === "Existing Customer") {
+    response.redirect(`/voice/existing/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
+  } else if (callType === "General Message" || attempt >= 2) {
+    response.redirect(`/voice/general/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
+  } else {
+    gatherClassification(
+      response,
+      businessName,
+      `/voice/classify?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}&businessName=${encodeURIComponent(businessName)}&attempt=2`
+    );
+  }
+
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/existing/name", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  sayAndGather(
+    response,
+    "Please say your name.",
+    `/voice/existing/address?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/existing/address", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const name = req.body.SpeechResult || "Not captured";
+  sayAndGather(
+    response,
+    "What is the job or service address?",
+    `/voice/existing/reason?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(name)}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/existing/reason", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const location = req.body.SpeechResult || "Not captured";
+  sayAndGather(
+    response,
+    "What is the reason for your call?",
+    `/voice/existing/urgency?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&location=${encodeURIComponent(location)}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/existing/urgency", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const notes = req.body.SpeechResult || "Not captured";
+  sayAndGather(
+    response,
+    "Does this need urgent attention, or is normal business-hours follow-up okay? If anyone is in immediate danger, please hang up and call 911 or the appropriate emergency service.",
+    `/voice/existing/callback-time?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&location=${encodeURIComponent(req.query.location || "")}&notes=${encodeURIComponent(notes)}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/existing/callback-time", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const urgency = req.body.SpeechResult || "Not captured";
+  sayAndGather(
+    response,
+    "What is the best callback time?",
+    `/voice/existing/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&location=${encodeURIComponent(req.query.location || "")}&notes=${encodeURIComponent(req.query.notes || "")}&urgency=${encodeURIComponent(urgency)}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/existing/finish", requireValidTwilioSignature, async (req, res) => {
+  const response = new VoiceResponse();
+  const to = req.body.To || "";
+  const preferredTime = req.body.SpeechResult || "Not captured";
+
+  if (!to) {
+    console.error("Voice existing customer callback not created: missing inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  let company;
+
+  try {
+    company = await findCompanyByTwilioNumber(to, "id");
+  } catch (error) {
+    console.error("Voice existing customer callback not created: company lookup failed for inbound Twilio number.", error.message);
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  if (!company) {
+    console.error("Voice existing customer callback not created: no company found for inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  const urgency = req.query.urgency || "Not captured";
+  const lead = {
+    id: uuidv4(),
+    source: "Phone Call",
+    callType: "Existing Customer",
+    status: "Callback Needed",
+    callSid: req.query.callSid || "",
+    callerPhone: req.query.callerPhone || "",
+    phone: req.query.callerPhone || "",
+    name: req.query.name || "Not captured",
+    jobType: "Existing job or appointment",
+    location: req.query.location || "Not captured",
+    urgency,
+    priority: urgency,
+    preferredTime,
+    notes: req.query.notes || "Not captured",
+    score: null,
+    qualification: null,
+    recommendedAction: "Contact the existing customer and review the related job or appointment.",
+    createdAt: new Date().toISOString(),
+    companyId: company.id
+  };
+
+  try {
+    await saveLead(lead);
+  } catch (error) {
+    console.error("Voice existing customer callback not created: Supabase save failed.", error.message);
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  try {
+    await sendOwnerEmail(lead);
+  } catch (error) {
+    console.error("Owner email notification failed:", error.message);
+  }
+
   response.say(
     { voice: "Polly.Matthew" },
-    `Thanks for calling ${businessName}. I'm going to grab your info quick.`
+    "Thank you. I've sent your message to the team. I don't have access to their schedule, billing records, or individual job details, so someone from the business will need to follow up with you."
   );
+  response.hangup();
+  res.type("text/xml").send(response.toString());
+});
 
-  response.redirect(`/voice/name?callSid=${encodeURIComponent(callSid)}&callerPhone=${encodeURIComponent(callerPhone)}`);
+app.post("/voice/general/name", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  sayAndGather(
+    response,
+    "Please say your name.",
+    `/voice/general/organization?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/general/organization", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const name = req.body.SpeechResult || "Not captured";
+  sayAndGather(
+    response,
+    "What business or organization are you calling from, if any?",
+    `/voice/general/message?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(name)}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/general/message", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const organization = req.body.SpeechResult || "General Message";
+  sayAndGather(
+    response,
+    "What message would you like to leave?",
+    `/voice/general/callback-requested?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(organization)}`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/general/callback-requested", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const message = req.body.SpeechResult || "Not captured";
+  const actionUrl = `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(message)}&callbackAttempt=1`;
+
+  sayAndGather(response, "Would you like a callback? Please say yes or no.", actionUrl);
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/general/callback-answer", requireValidTwilioSignature, (req, res) => {
+  const response = new VoiceResponse();
+  const callbackRequested = wantsCallback(req.body.Digits, req.body.SpeechResult);
+  const callbackAttempt = Number(req.query.callbackAttempt || "1");
+
+  if (callbackRequested === false || (callbackRequested === null && callbackAttempt >= 2)) {
+    response.redirect(`/voice/general/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(req.query.message || "")}&callbackRequested=no&preferredTime=${encodeURIComponent("Not requested")}`);
+    return res.type("text/xml").send(response.toString());
+  }
+
+  if (callbackRequested === null) {
+    sayAndGather(
+      response,
+      "Would you like a callback? Please say yes or no.",
+      `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(req.query.message || "")}&callbackAttempt=2`
+    );
+    return res.type("text/xml").send(response.toString());
+  }
+
+  sayAndGather(
+    response,
+    "What is the best callback time?",
+    `/voice/general/finish?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(req.query.message || "")}&callbackRequested=yes`
+  );
+  res.type("text/xml").send(response.toString());
+});
+
+app.post("/voice/general/finish", requireValidTwilioSignature, async (req, res) => {
+  const response = new VoiceResponse();
+  const to = req.body.To || "";
+  const callbackRequested = req.query.callbackRequested === "yes";
+  const preferredTime = callbackRequested ? req.body.SpeechResult || "Not captured" : req.query.preferredTime || "Not requested";
+
+  if (!to) {
+    console.error("Voice general message not created: missing inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  let company;
+
+  try {
+    company = await findCompanyByTwilioNumber(to, "id");
+  } catch (error) {
+    console.error("Voice general message not created: company lookup failed for inbound Twilio number.", error.message);
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  if (!company) {
+    console.error("Voice general message not created: no company found for inbound Twilio destination number.");
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  const organization = organizationOrGeneralMessage(req.query.organization);
+  const lead = {
+    id: uuidv4(),
+    source: "Phone Call",
+    callType: "General Message",
+    status: "New",
+    callSid: req.query.callSid || "",
+    callerPhone: req.query.callerPhone || "",
+    phone: req.query.callerPhone || "",
+    name: req.query.name || "Not captured",
+    jobType: organization || "General Message",
+    location: "Not captured",
+    urgency: "Normal",
+    priority: "Normal",
+    preferredTime,
+    notes: req.query.message || "Not captured",
+    score: null,
+    qualification: null,
+    recommendedAction: callbackRequested ? "Call back if requested and review the message." : "Review the message.",
+    createdAt: new Date().toISOString(),
+    companyId: company.id
+  };
+
+  try {
+    await saveLead(lead);
+  } catch (error) {
+    console.error("Voice general message not created: Supabase save failed.", error.message);
+    response.say({ voice: "Polly.Matthew" }, "Sorry, we could not save your message right now. Please call again later.");
+    response.hangup();
+    return res.type("text/xml").send(response.toString());
+  }
+
+  try {
+    await sendOwnerEmail(lead);
+  } catch (error) {
+    console.error("Owner email notification failed:", error.message);
+  }
+
+  response.say(
+    { voice: "Polly.Matthew" },
+    "Thanks. I saved your message for the team to review."
+  );
+  response.hangup();
   res.type("text/xml").send(response.toString());
 });
 
@@ -801,6 +1246,7 @@ app.post("/voice/finish", requireValidTwilioSignature, async (req, res) => {
   const lead = {
     id: uuidv4(),
     source: "Phone Call",
+    callType: "New Lead",
     status: "New",
     callSid: req.query.callSid || "",
     callerPhone: req.query.callerPhone || "",
