@@ -605,6 +605,8 @@ function organizationOrGeneralMessage(organization) {
     "i'm not calling from an organization",
     "im not calling from an organization",
     "i am not calling from an organization",
+    "i'm not calling from any organization",
+    "im not calling from any organization",
     "i am not calling from any organization",
     "i'm not with a company",
     "im not with a company",
