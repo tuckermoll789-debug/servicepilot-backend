@@ -553,6 +553,9 @@ function wantsCallback(digits, speechResult) {
     normalizedSpeech === "no" ||
     normalizedSpeech === "no callback" ||
     normalizedSpeech.includes("do not call") ||
+    normalizedSpeech.includes("don t call") ||
+    normalizedSpeech.includes("dont call") ||
+    normalizedSpeech.includes("never call") ||
     normalizedSpeech.includes("don t need a callback") ||
     normalizedSpeech.includes("dont need a callback") ||
     normalizedSpeech.includes("not needed")
