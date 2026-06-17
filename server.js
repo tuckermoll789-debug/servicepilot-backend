@@ -483,6 +483,20 @@ function sayAndGatherLongSpeech(response, prompt, actionUrl) {
   response.redirect(actionUrl);
 }
 
+function gatherCallbackChoice(response, prompt, actionUrl) {
+  const gatherNode = response.gather({
+    input: "speech dtmf",
+    numDigits: 1,
+    action: actionUrl,
+    method: "POST",
+    speechTimeout: "auto",
+    language: "en-US"
+  });
+
+  gatherNode.say({ voice: "Polly.Matthew" }, prompt);
+  response.redirect(actionUrl);
+}
+
 function gatherClassification(response, businessName, actionUrl) {
   const prompt = `Thanks for calling ${businessName}. I'm the automated assistant helping while the team is unavailable. For a new service request, press or say 1. For an existing job or appointment, press or say 2. For anything else, press or say 3.`;
   const gatherNode = response.gather({
@@ -564,7 +578,12 @@ function wantsCallback(digits, speechResult) {
 
   if (
     normalizedSpeech === "no" ||
+    normalizedSpeech === "no thank you" ||
+    normalizedSpeech === "no thanks" ||
     normalizedSpeech === "no callback" ||
+    normalizedSpeech === "i do not need a callback" ||
+    normalizedSpeech === "i don t need a callback" ||
+    normalizedSpeech === "i dont need a callback" ||
     normalizedSpeech.includes("do not call") ||
     normalizedSpeech.includes("don t call") ||
     normalizedSpeech.includes("dont call") ||
@@ -629,7 +648,7 @@ function organizationOrGeneralMessage(organization) {
     "n a"
   ]);
   const negativeOrganizationPatterns = [
-    /^i (?:do not|dont) have (?:a|an|any) (?:business(?: organization)?|organization(?: name)?|company)$/,
+    /^i (?:do not|dont) have (?:i (?:do not|dont) have )?(?:a|an) (?:business(?: organization)?|organization(?: name)?|company)$/,
     /^i (?:am|m) not with (?:a|any) (?:company|organization)$/,
     /^(?:no )?this is (?:just )?a personal call$/
   ];
@@ -1110,7 +1129,7 @@ app.post("/voice/general/callback-requested", requireValidTwilioSignature, (req,
   const message = req.body.SpeechResult || "Not captured";
   const actionUrl = `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(message)}&callbackAttempt=1`;
 
-  sayAndGather(response, "Would you like a callback? Please say yes or no.", actionUrl);
+  gatherCallbackChoice(response, "Would you like a callback? Press or say 1 for yes. Press or say 2 for no.", actionUrl);
   res.type("text/xml").send(response.toString());
 });
 
@@ -1125,9 +1144,9 @@ app.post("/voice/general/callback-answer", requireValidTwilioSignature, (req, re
   }
 
   if (callbackRequested === null) {
-    sayAndGather(
+    gatherCallbackChoice(
       response,
-      "Would you like a callback? Please say yes or no.",
+      "Would you like a callback? Press or say 1 for yes. Press or say 2 for no.",
       `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(req.query.message || "")}&callbackAttempt=2`
     );
     return res.type("text/xml").send(response.toString());
