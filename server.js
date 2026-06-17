@@ -483,6 +483,20 @@ function sayAndGatherLongSpeech(response, prompt, actionUrl) {
   response.redirect(actionUrl);
 }
 
+function gatherGeneralCallbackChoice(response, prompt, actionUrl) {
+  const gatherNode = response.gather({
+    input: "speech dtmf",
+    numDigits: 1,
+    action: actionUrl,
+    method: "POST",
+    speechTimeout: "auto",
+    language: "en-US"
+  });
+
+  gatherNode.say({ voice: "Polly.Matthew" }, prompt);
+  response.redirect(actionUrl);
+}
+
 function gatherClassification(response, businessName, actionUrl) {
   const prompt = `Thanks for calling ${businessName}. I'm the automated assistant helping while the team is unavailable. For a new service request, press or say 1. For an existing job or appointment, press or say 2. For anything else, press or say 3.`;
   const gatherNode = response.gather({
@@ -562,17 +576,24 @@ function wantsCallback(digits, speechResult) {
   const normalizedSpeech = String(speechResult || "").toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
   if (!normalizedSpeech) return null;
 
-  if (
-    normalizedSpeech === "no" ||
-    normalizedSpeech === "no callback" ||
-    normalizedSpeech.includes("do not call") ||
-    normalizedSpeech.includes("don t call") ||
-    normalizedSpeech.includes("dont call") ||
-    normalizedSpeech.includes("never call") ||
-    normalizedSpeech.includes("don t need a callback") ||
-    normalizedSpeech.includes("dont need a callback") ||
-    normalizedSpeech.includes("not needed")
-  ) {
+  const negativeCallbackResponses = new Set([
+    "no",
+    "no thank you",
+    "no thanks",
+    "no callback",
+    "i do not need a callback",
+    "i don t need a callback",
+    "i dont need a callback",
+    "do not call",
+    "don t call",
+    "dont call",
+    "never call",
+    "don t need a callback",
+    "dont need a callback",
+    "not needed"
+  ]);
+
+  if (negativeCallbackResponses.has(normalizedSpeech)) {
     return false;
   }
 
@@ -629,6 +650,7 @@ function organizationOrGeneralMessage(organization) {
     "n a"
   ]);
   const negativeOrganizationPatterns = [
+    /^i (?:do not|dont) have (?:i (?:do not|dont) have )?(?:a business(?: organization)?|an organization(?: name)?|a company)$/,
     /^i (?:do not|dont) have (?:a|an|any) (?:business(?: organization)?|organization(?: name)?|company)$/,
     /^i (?:am|m) not with (?:a|any) (?:company|organization)$/,
     /^(?:no )?this is (?:just )?a personal call$/
@@ -1110,7 +1132,7 @@ app.post("/voice/general/callback-requested", requireValidTwilioSignature, (req,
   const message = req.body.SpeechResult || "Not captured";
   const actionUrl = `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(message)}&callbackAttempt=1`;
 
-  sayAndGather(response, "Would you like a callback? Please say yes or no.", actionUrl);
+  gatherGeneralCallbackChoice(response, "Would you like a callback? Press or say 1 for yes. Press or say 2 for no.", actionUrl);
   res.type("text/xml").send(response.toString());
 });
 
@@ -1125,9 +1147,9 @@ app.post("/voice/general/callback-answer", requireValidTwilioSignature, (req, re
   }
 
   if (callbackRequested === null) {
-    sayAndGather(
+    gatherGeneralCallbackChoice(
       response,
-      "Would you like a callback? Please say yes or no.",
+      "Would you like a callback? Press or say 1 for yes. Press or say 2 for no.",
       `/voice/general/callback-answer?callSid=${encodeURIComponent(req.query.callSid || "")}&callerPhone=${encodeURIComponent(req.query.callerPhone || "")}&name=${encodeURIComponent(req.query.name || "")}&organization=${encodeURIComponent(req.query.organization || "")}&message=${encodeURIComponent(req.query.message || "")}&callbackAttempt=2`
     );
     return res.type("text/xml").send(response.toString());
