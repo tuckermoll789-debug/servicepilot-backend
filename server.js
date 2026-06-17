@@ -583,7 +583,14 @@ function wantsCallback(digits, speechResult) {
     "no callback",
     "i do not need a callback",
     "i don t need a callback",
-    "i dont need a callback"
+    "i dont need a callback",
+    "do not call",
+    "don t call",
+    "dont call",
+    "never call",
+    "don t need a callback",
+    "dont need a callback",
+    "not needed"
   ]);
 
   if (negativeCallbackResponses.has(normalizedSpeech)) {
