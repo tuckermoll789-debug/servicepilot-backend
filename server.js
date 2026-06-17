@@ -476,7 +476,8 @@ function sayAndGatherLongSpeech(response, prompt, actionUrl) {
     action: actionUrl,
     method: "POST",
     speechTimeout: 2,
-    language: "en-US"
+    language: "en-US",
+    speechModel: "experimental_conversations"
   });
 
   gatherNode.say({ voice: "Polly.Matthew" }, prompt);
